@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registro de Residuos</title>
+  <!-- Tailwind CSS para los estilos -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Phosphor Icons para los íconos -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <!-- Chart.js para los gráficos del Dashboard -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body class="bg-gray-50 text-gray-800 font-sans min-h-screen relative">
+
+  <!-- ========================================== -->
+  <!-- PANTALLA DE LOGIN -->
+  <!-- ========================================== -->
+  <div id="loginContainer" class="absolute inset-0 bg-gray-50 flex items-center justify-center p-4 z-50">
+    <div class="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 w-full max-w-md">
+      <div class="text-center mb-8">
+        <div class="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+          <i class="ph-fill ph-leaf text-green-600 text-3xl"></i>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-900">Bienvenido</h1>
+        <p class="text-gray-500 text-sm mt-1">Ingresa tus credenciales para continuar</p>
+      </div>
+
+      <form id="loginForm" class="space-y-5">
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-gray-700 flex items-center gap-2">
+            <i class="ph ph-user text-gray-400"></i> Usuario
+          </label>
+          <input type="text" id="loginUsuario" required placeholder="Ej. Mario" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all">
+        </div>
+
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-gray-700 flex items-center gap-2">
+            <i class="ph ph-lock-key text-gray-400"></i> Contraseña
+          </label>
+          <input type="password" id="loginPassword" required placeholder="••••••••" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all">
+        </div>
+
+        <div id="loginErrorMsg" class="hidden bg-red-50 text-red-600 text-sm p-3 rounded-lg border border-red-100 flex items-start gap-2">
+          <i class="ph-fill ph-warning-circle text-lg shrink-0"></i>
+          <span id="loginErrorText">Usuario o contraseña incorrectos.</span>
+        </div>
+
+        <button type="submit" id="loginSubmitBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 focus:ring-4 focus:ring-green-200">
+          <i class="ph ph-sign-in text-xl"></i>
+          <span>Ingresar al Sistema</span>
+        </button>
+      </form>
+      <br>
+      <p class="text-gray-400 text-center text-sm ">Contacto: 910727071 MarioFPacoT</p>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- APLICACIÓN PRINCIPAL -->
+  <!-- ========================================== -->
+  <div id="appContainer" class="hidden p-4 md:p-8 max-w-6xl mx-auto space-y-6 fade-in">
+
+    <!-- Encabezado Principal y Navegación (Se oculta al imprimir) -->
+    <header id="mainHeader" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-4 print:hidden">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <div class="hidden md:flex items-center justify-center w-12 h-12 bg-green-50 rounded-lg">
+            <i class="ph-fill ph-recycle text-green-600 text-3xl"></i>
+          </div>
+          <div>
+            <h1 class="text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2">
+              Gestión de Residuos
+            </h1>
+            <p class="text-gray-500 text-sm mt-1">
+              Hola, <span id="displayUserName" class="font-medium text-green-700">Usuario</span>
+              <span class="text-gray-300 mx-1">|</span>
+              <button id="btnAbrirCredenciales" class="text-green-600 hover:text-green-700 font-medium transition-colors mr-2 flex items-center inline-flex gap-1"><i class="ph ph-key"></i> Credenciales</button>
+              <span class="text-gray-300 mx-1 hidden sm:inline">|</span>
+              <button id="logoutBtn" class="text-gray-400 hover:text-red-500 transition-colors underline decoration-dotted">Cerrar sesión</button>
+            </p>
+          </div>
+        </div>
+        <div class="text-right flex flex-col items-end">
+          <input type="text" id="timestamp" name="timestamp" class="text-xs md:text-sm text-gray-500 bg-transparent border border-transparent hover:border-gray-200 focus:border-gray-300 focus:bg-gray-50 rounded px-2 py-1 outline-none transition-all text-right w-[140px] md:w-[150px] cursor-text" title="Clic para editar fecha y hora">
+          <span id="displayUserRole" class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-md mt-1 border border-gray-200">Rol</span>
+        </div>
+      </div>
+
+      <!-- Pestañas de Navegación -->
+      <nav class="flex gap-6 mt-2 border-b border-gray-200">
+        <button id="tabRegistro" class="pb-2 text-green-600 border-b-2 border-green-600 font-medium transition-colors flex items-center gap-2">
+          <i class="ph ph-note-pencil text-lg"></i> Registro
+        </button>
+        <button id="tabDashboard" class="pb-2 text-gray-500 hover:text-green-600 font-medium transition-colors flex items-center gap-2">
+          <i class="ph ph-chart-bar text-lg"></i> Dashboard
+        </button>
+      </nav>
+    </header>
+
+    <!-- ========================================== -->
+    <!-- VISTA 1: FORMULARIO DE REGISTRO -->
+    <!-- ========================================== -->
+    <div id="vistaRegistro" class="grid grid-cols-1 lg:grid-cols-3 gap-6 fade-in print:hidden">
+      <div class="lg:col-span-2">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div class="bg-green-600 px-6 py-4 flex items-center justify-between">
+            <h2 class="text-white font-semibold text-lg flex items-center gap-2">
+              <i class="ph ph-file-text text-xl"></i> Nuevo Registro
+            </h2>
+          </div>
+
+          <form id="residuosForm" class="p-6 space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="space-y-2">
+                <label class="text-sm font-medium text-gray-700 flex items-center gap-2">
+                  <i class="ph ph-user text-gray-400 text-lg"></i> Supervisor (Correo)
+                </label>
+                <input type="email" id="supervisor" name="supervisor" readonly required class="w-full px-4 py-2 border border-gray-200 bg-gray-50 text-gray-500 rounded-lg outline-none cursor-not-allowed">
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-medium text-gray-700 flex items-center gap-2">
+                  <i class="ph ph-map-pin text-gray-400 text-lg"></i> Área de Origen
+                </label>
+                <select id="area" name="area" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all bg-white">
+                  <option value="" disabled selected>Seleccione un área...</option>
+                  <option value="Almacen PT">Almacen PT</option>
+                  <option value="Almacen MP">Almacen MP</option>
+                  <option value="Almacen Insumos">Almacen Insumos</option>
+                  <option value="Desposte">Desposte</option>
+                  <option value="Empaque">Empaque</option>
+                  <option value="Madurado">Madurado</option>
+                  <option value="Produccion">Produccion</option>
+                  <option value="Residuos por Control de Calidad">Residuos por Control de Calidad</option>
+                  <option value="Saneamiento">Saneamiento</option>
+                  <option value="Skin">Skin</option>
+                  <option value="Otra">Otra...</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div class="space-y-2">
+                <label class="text-sm font-medium text-gray-700 flex items-center gap-2">
+                  <i class="ph ph-recycle text-gray-400 text-lg"></i> Tipo de Residuo
+                </label>
+                <select id="tipo" name="tipo" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all bg-white">
+                  <option value="Organico">Organico</option>
+                  <option value="Plastico">Plastico</option>
+                  <option value="Carton/Papel">Carton/Papel</option>
+                  <option value="Generales/Basura">Generales/Basura</option>
+                </select>
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-medium text-gray-700 flex items-center gap-2">
+                  <i class="ph ph-scales text-gray-400 text-lg"></i> Peso (Kg)
+                </label>
+                <input type="number" id="peso" name="peso" step="0.01" min="0" placeholder="0.00" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all">
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-medium text-gray-700 flex items-center gap-2">
+                  <i class="ph ph-shopping-bag text-gray-400 text-lg"></i> Bolsas Usadas
+                </label>
+                <input type="number" id="bolsas" name="bolsas" step="1" min="0" value="1" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all">
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <label class="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <i class="ph ph-camera text-gray-400 text-lg"></i> Evidencia Fotográfica
+              </label>
+              <div class="mt-1 p-4 border-2 border-gray-300 border-dashed rounded-lg hover:border-green-500 transition-colors bg-gray-50 flex flex-col items-center justify-center min-h-[160px]">
+                <div id="imagePlaceholder" class="space-y-2 text-center w-full">
+                  <i class="ph ph-camera mx-auto text-4xl text-gray-400"></i>
+                  <div class="flex text-sm text-gray-600 justify-center">
+                    <label for="imagen" class="relative cursor-pointer bg-white rounded-md font-medium text-green-600 hover:text-green-500 px-3 py-2 border border-green-200 shadow-sm transition-all hover:shadow">
+                      <span><i class="ph ph-camera-plus mr-1"></i> Tomar foto o subir</span>
+                      <input id="imagen" name="imagen" type="file" class="sr-only" accept="image/*" capture="environment">
+                    </label>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-2">Formatos soportados: PNG, JPG</p>
+                </div>
+                <div id="imagePreviewContainer" class="hidden flex-col items-center w-full">
+                  <img id="imagePreview" src="" alt="Vista previa de evidencia" class="max-h-48 object-contain rounded-md shadow-sm border border-gray-200 mb-3">
+                  <p id="fileNameDisplay" class="text-sm font-medium text-green-600 truncate max-w-[250px] mb-2"></p>
+                  <button type="button" id="removeImageBtn" class="text-sm text-red-500 hover:text-red-700 font-medium flex items-center gap-1 px-3 py-1 rounded-md hover:bg-red-50 transition-colors">
+                    <i class="ph ph-trash"></i> Eliminar foto
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <label class="text-sm font-medium text-gray-700">Observaciones</label>
+              <textarea id="observaciones" name="observaciones" rows="3" placeholder="Ej. 1 saco, aserrín de pasta, etc." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all resize-none"></textarea>
+            </div>
+
+            <div class="pt-4 flex items-center justify-between">
+              <span id="successMessage" class="flex items-center text-green-600 font-medium opacity-0 transition-opacity duration-300">
+                <i class="ph-fill ph-check-circle text-xl mr-2"></i> ¡Guardado exitosamente!
+              </span>
+              <button type="submit" id="submitBtn" class="bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-8 rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2 focus:ring-4 focus:ring-green-200 disabled:opacity-70 disabled:cursor-not-allowed">
+                <i class="ph ph-floppy-disk text-xl"></i>
+                <span>Guardar Registro</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="lg:col-span-1 space-y-6">
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+          <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <i class="ph ph-list-bullets text-gray-500 text-xl"></i> Registros Recientes
+          </h3>
+          <div id="registrosContainer" class="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+            <div class="text-center text-gray-500 text-sm py-4 italic">
+              Los registros guardados en esta sesión aparecerán aquí.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VISTA 2: DASHBOARD Y REPORTE CORPORATIVO -->
+    <!-- ========================================== -->
+    <div id="vistaDashboard" class="hidden space-y-6 fade-in">
+      
+      <!-- Estado de Carga -->
+      <div id="dashboardLoading" class="flex flex-col items-center justify-center py-20 bg-white rounded-xl shadow-sm border border-gray-100 print:hidden">
+        <i class="ph ph-spinner-gap ph-spin text-4xl text-green-600 mb-4"></i>
+        <p class="text-gray-500 font-medium">Obteniendo datos de la base de datos...</p>
+      </div>
+
+      <!-- Contenido del Dashboard -->
+      <div id="dashboardContent" class="hidden space-y-4 print:space-y-0">
+        
+        <!-- CABECERA EXCLUSIVA PARA IMPRESIÓN (DISEÑO HACCP - LA GENOVESA) -->
+        <div class="haccp-print-container mb-6 print:mb-2 w-full hidden print:block">
+          <div class="header-flex-container">
+            <svg class="logo" viewBox="60 20 280 160" xmlns="http://www.w3.org/2000/svg">
+              <path d="m200 25 135 47v56l-135 47-135-47V72z" fill="#C51D23" stroke="#C51D23" stroke-width="8" stroke-linejoin="round"/>
+              <path d="m200 25 135 47v56l-135 47-135-47V72z" fill="none" stroke="#B08D57" stroke-width="1" stroke-linejoin="round"/>
+              <text x="200" y="86" font-family="Times, serif" font-size="36" font-weight="bold" text-anchor="middle" fill="#404040">LA</text>
+              <text x="200" y="85" font-family="Times, serif" font-size="36" font-weight="bold" text-anchor="middle" fill="#FFF">LA</text>
+              <text x="200" y="121" font-family="Times, serif" font-size="42" font-weight="bold" text-anchor="middle" fill="#404040">GENOVESA</text>
+              <text x="200" y="120" font-family="Times, serif" font-size="42" font-weight="bold" text-anchor="middle" fill="#FFF">GENOVESA</text>
+              <text x="200" y="145" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#FFF" letter-spacing="3">DESDE 1977</text>
+            </svg>
+            <div class="header-text-wrapper">
+              <div class="header-title">
+                  PLAN HACCP<br>
+                  REPORTE DE GESTIÓN DE RESIDUOS
+              </div>
+              <div class="template-details">
+                  <div>Código: LGA-SGA-RES-01</div>
+                  <div >Fecha: 08-2025</div>
+                  <div>Versión: 1</div>
+              </div>
+              <div class="template-details">
+                  <div>Elaborado por: Área de Aseguramiento de Calidad</div>
+                  <div>Revisado por: Sub Gerente</div>
+                  <div>Aprobado por: Gerente General</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECCIÓN DE INFORMACIÓN Y FILTROS -->
+          <div class="section-info">
+            <div>
+              <span style="color: #0056B3;font-size: 1em; font-weight: bold;">Fecha Inicio: </span><span id="printFInicio"></span><br>
+              <span style="color: #0056B3;font-size: 1em; font-weight: bold;">Fecha Fin: </span><span id="printFFin"></span>
+            </div>
+            <div>
+              <span style="color: #0056B3;font-size: 1em; font-weight: bold;">Área: </span><span id="printFArea"></span><br>
+              <span style="color: #0056B3;font-size: 1em; font-weight: bold;">Tipo Residuo: </span><span id="printFTipo"></span>
+            </div>
+            <div>
+              <span style="color: #0056B3;font-size: 1em; font-weight: bold;">Generado por: </span><span id="printGeneradoPor"></span>
+            </div>
+          </div>
+        </div>
+        <!-- FIN CABECERA IMPRESIÓN -->
+
+        <!-- Barra Superior del Dashboard (Pantalla) -->
+        <div class="flex justify-between items-center print:hidden">
+          <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2"><i class="ph ph-chart-line-up text-green-600"></i> Análisis General</h2>
+          <button id="btnPrint" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm">
+            <i class="ph ph-printer text-lg"></i> Imprimir Reporte
+          </button>
+        </div>
+
+        <!-- Filtros Interactivos (Ocultos al imprimir) -->
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 grid grid-cols-1 md:grid-cols-4 gap-4 items-end print:hidden">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1 flex items-center gap-1"><i class="ph ph-calendar"></i> Fecha Inicio</label>
+            <input type="date" id="filtroFechaInicio" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1 flex items-center gap-1"><i class="ph ph-calendar"></i> Fecha Fin</label>
+            <input type="date" id="filtroFechaFin" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1 flex items-center gap-1"><i class="ph ph-map-pin"></i> Área</label>
+            <select id="filtroArea" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all bg-white">
+              <option value="TODAS">Todas las áreas</option>
+              <option value="Almacen PT">Almacen PT</option>
+              <option value="Almacen MP">Almacen MP</option>
+              <option value="Almacen Insumos">Almacen Insumos</option>
+              <option value="Desposte">Desposte</option>
+              <option value="Empaque">Empaque</option>
+              <option value="Madurado">Madurado</option>
+              <option value="Produccion">Produccion</option>
+              <option value="Residuos por Control de Calidad">Residuos por Control de Calidad</option>
+              <option value="Saneamiento">Saneamiento</option>
+              <option value="Skin">Skin</option>
+              <option value="Otra">Otra...</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1 flex items-center gap-1"><i class="ph ph-recycle"></i> Tipo</label>
+            <select id="filtroTipo" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all bg-white">
+              <option value="TODOS">Todos los tipos</option>
+              <option value="Organico">Organico</option>
+              <option value="Plastico">Plastico</option>
+              <option value="Carton/Papel">Carton/Papel</option>
+              <option value="Generales/Basura">Generales/Basura</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Tarjetas de KPIs -->
+        <div id="printKpiGrid" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div class="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center text-green-600">
+              <i class="ph-fill ph-scales text-3xl print:text-xl"></i>
+            </div>
+            <div>
+              <p class="text-sm text-gray-500 font-medium print:text-gray-700">Total Residuos (Kg)</p>
+              <h3 id="kpiPeso" class="text-2xl font-bold text-gray-900">0.0</h3>
+            </div>
+          </div>
+          
+          <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div class="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+              <i class="ph-fill ph-shopping-bag text-3xl print:text-xl"></i>
+            </div>
+            <div>
+              <p class="text-sm text-gray-500 font-medium print:text-gray-700">Bolsas Utilizadas</p>
+              <h3 id="kpiBolsas" class="text-2xl font-bold text-gray-900">0</h3>
+            </div>
+          </div>
+
+          <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div class="w-14 h-14 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
+              <i class="ph-fill ph-files text-3xl print:text-xl"></i>
+            </div>
+            <div>
+              <p class="text-sm text-gray-500 font-medium print:text-gray-700">Registros Filtrados</p>
+              <h3 id="kpiRegistros" class="text-2xl font-bold text-gray-900">0</h3>
+            </div>
+          </div>
+        </div>
+
+        <!-- Gráficos -->
+        <div id="printChartGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-8 print:pb-2">
+          <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 print:break-inside-avoid print:p-2">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4 border-b border-gray-100 pb-2 print:mb-2 print:text-base">Residuos por Área (Kg)</h3>
+            <div class="relative h-[300px] mt-4">
+              <canvas id="chartArea"></canvas>
+            </div>
+          </div>
+          
+          <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 print:break-inside-avoid print:p-2">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4 border-b border-gray-100 pb-2 print:mb-2 print:text-base">Distribución por Tipo</h3>
+            <div class="relative h-[300px] flex justify-center mt-4">
+              <canvas id="chartTipo"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- PIE DE REPORTE (NOTAS Y FIRMA - EXCLUSIVO IMPRESIÓN) -->
+        <div class="haccp-print-container w-full hidden print:block mt-6">
+          <div class="bottom-sections-wrapper">
+              <div class="notes-section">
+                  <div class="notes-box">
+                      <!--     <table>
+                          <thead>
+                              <tr>
+                                  <th style="border-right: 1px solid #ddd; background-color: #0056B3; color: white;">Estado MP</th>
+                                  <th style="border-right: 1px solid #ddd; background-color: #0056B3; color: white;">Criterio</th>
+                                  <th style="border-right: 1px solid #ddd; background-color: #0056B3; color: white;">Límites críticos</th>
+                                  <th style="background-color: #0056B3; color: white;">Observaciones</th>
+                              </tr>
+                          </thead>
+                          <tbody>
+                              <tr>
+                                  <td style="border-right: 1px solid #ddd;"><strong>Materia Prima Congelada</strong></td>
+                                  <td style="border-right: 1px solid #ddd;">Temperatura</td>
+                                  <td style="border-right: 1px solid #ddd;">≥ -18°C / ≤ -12°C</td>
+                                  <td>Fuera de este rango, **NO SE PERMITE EL INGRESO**.</td>
+                              </tr>
+                          </tbody>
+                      </table>            -->
+                      <ul>
+                          <li>El residuo debe estar siempre segregado por tipo.</li>
+                          <li>Ante cualquier incidencia reportar a Jefatura de AGCC</li>
+                      </ul>
+                  </div>
+              </div>
+              <div class="signature-section">
+                  <div class="signature-box">
+                      <div class="signature-area">
+                          <!-- Espacio reservado para la firma física del usuario -->
+                      </div>
+                      <div class="label" id="printFirmaNombre">Supervisor</div>
+                  </div>
+              </div>
+          </div>
+        </div>
+        <!-- FIN PIE DE REPORTE -->
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL CAMBIO DE CREDENCIALES -->
+  <!-- ========================================== -->
+  <div id="modalCredenciales" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-lg w-full max-w-sm overflow-hidden">
+      <div class="bg-gray-50 border-b border-gray-100 px-6 py-4 flex items-center gap-2">
+        <i class="ph-fill ph-key text-xl text-green-600"></i>
+        <h3 class="text-lg font-bold text-gray-900">Actualizar Credenciales</h3>
+      </div>
+      <form id="formCredenciales" class="p-6 space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Nuevo Usuario</label>
+          <input type="text" id="nuevoUsuario" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Nueva Contraseña</label>
+          <input type="text" id="nuevaPassword" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all">
+        </div>
+        
+        <div id="credErrorMsg" class="hidden text-red-600 text-sm bg-red-50 p-2 rounded border border-red-100"></div>
+        <div id="credSuccessMsg" class="hidden text-green-600 text-sm bg-green-50 p-2 rounded border border-green-100"><i class="ph-fill ph-check-circle"></i> ¡Credenciales actualizadas!</div>
+        
+        <div class="flex justify-end gap-3 pt-4">
+          <button type="button" id="btnCerrarCredenciales" class="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors">Cancelar</button>
+          <button type="submit" id="btnGuardarCredenciales" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2">
+            Guardar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // CONFIGURACIÓN DE GOOGLE APPS SCRIPT
+    // ==========================================
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxtRPvgzwS23dx5_NQLlsrIOgDjlP3-wX4B6li8wjJjjnmnnXi22b703PK8zFT4iplAKQ/exec';
+    
+    // ==========================================
+    // VARIABLES GLOBALES
+    // ==========================================
+    let currentUser = null;
+    let chartAreaInstancia = null;
+    let chartTipoInstancia = null;
+    let datosCargados = false; 
+    let todosLosRegistros = []; 
+    
+    // ==========================================
+    // INICIALIZACIÓN
+    // ==========================================
+    function actualizarTimestamp() {
+      const now = new Date();
+      const day = String(now.getDate()).padStart(2, '0');
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const year = now.getFullYear();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      const timestampStr = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+      document.getElementById('timestamp').value = timestampStr;
+    }
+
+    function inicializarFiltrosFechas() {
+      const tzoffset = (new Date()).getTimezoneOffset() * 60000;
+      const localISOTime = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
+      
+      document.getElementById('filtroFechaInicio').value = localISOTime;
+      document.getElementById('filtroFechaFin').value = localISOTime;
+
+      document.getElementById('filtroFechaInicio').addEventListener('change', aplicarFiltros);
+      document.getElementById('filtroFechaFin').addEventListener('change', aplicarFiltros);
+      document.getElementById('filtroArea').addEventListener('change', aplicarFiltros);
+      document.getElementById('filtroTipo').addEventListener('change', aplicarFiltros);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const savedUser = localStorage.getItem('appResiduosUser');
+      if (savedUser) {
+        currentUser = JSON.parse(savedUser);
+        mostrarAplicacion();
+      }
+      actualizarTimestamp();
+      inicializarFiltrosFechas();
+    });
+
+    // ==========================================
+    // NAVEGACIÓN (TABS)
+    // ==========================================
+    const tabRegistro = document.getElementById('tabRegistro');
+    const tabDashboard = document.getElementById('tabDashboard');
+    const vistaRegistro = document.getElementById('vistaRegistro');
+    const vistaDashboard = document.getElementById('vistaDashboard');
+
+    tabRegistro.addEventListener('click', () => {
+      tabRegistro.classList.add('text-green-600', 'border-b-2', 'border-green-600');
+      tabRegistro.classList.remove('text-gray-500');
+      tabDashboard.classList.remove('text-green-600', 'border-b-2', 'border-green-600');
+      tabDashboard.classList.add('text-gray-500');
+      vistaDashboard.classList.add('hidden');
+      vistaRegistro.classList.remove('hidden');
+    });
+
+    tabDashboard.addEventListener('click', () => {
+      tabDashboard.classList.add('text-green-600', 'border-b-2', 'border-green-600');
+      tabDashboard.classList.remove('text-gray-500');
+      tabRegistro.classList.remove('text-green-600', 'border-b-2', 'border-green-600');
+      tabRegistro.classList.add('text-gray-500');
+      vistaRegistro.classList.add('hidden');
+      vistaDashboard.classList.remove('hidden');
+
+      if (!datosCargados) {
+        cargarDatosDashboard();
+      }
+    });
+
+    // ==========================================
+    // MANEJO DEL LOGIN
+    // ==========================================
+    const loginForm = document.getElementById('loginForm');
+    const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+    const loginErrorMsg = document.getElementById('loginErrorMsg');
+    const loginErrorText = document.getElementById('loginErrorText');
+
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      loginErrorMsg.classList.add('hidden');
+      
+      const userVal = document.getElementById('loginUsuario').value.trim();
+      const passVal = document.getElementById('loginPassword').value.trim();
+      const btnHtml = loginSubmitBtn.innerHTML;
+      
+      loginSubmitBtn.disabled = true;
+      loginSubmitBtn.innerHTML = '<i class="ph ph-spinner ph-spin text-xl"></i> <span>Verificando...</span>';
+      
+      try {
+        const response = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'login', usuario: userVal, password: passVal })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+          currentUser = result.user; 
+          localStorage.setItem('appResiduosUser', JSON.stringify(currentUser));
+          mostrarAplicacion();
+        } else {
+          throw new Error(result.message || "Credenciales incorrectas");
+        }
+
+      } catch (error) {
+        loginErrorText.textContent = error.message || "Error al conectar. Intenta nuevamente.";
+        loginErrorMsg.classList.remove('hidden');
+      } finally {
+        loginSubmitBtn.disabled = false;
+        loginSubmitBtn.innerHTML = btnHtml;
+      }
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      localStorage.removeItem('appResiduosUser');
+      currentUser = null;
+      datosCargados = false; 
+      todosLosRegistros = [];
+      document.getElementById('loginUsuario').value = '';
+      document.getElementById('loginPassword').value = '';
+      document.getElementById('appContainer').classList.add('hidden');
+      document.getElementById('loginContainer').classList.remove('hidden');
+      tabRegistro.click(); 
+    });
+
+    function mostrarAplicacion() {
+      document.getElementById('loginContainer').classList.add('hidden');
+      document.getElementById('appContainer').classList.remove('hidden');
+      document.getElementById('displayUserName').textContent = currentUser.nombre;
+      document.getElementById('displayUserRole').textContent = currentUser.rol || "Supervisor";
+      document.getElementById('supervisor').value = currentUser.email;
+    }
+
+    // ==========================================
+    // MANEJO DE CREDENCIALES
+    // ==========================================
+    const btnAbrirCredenciales = document.getElementById('btnAbrirCredenciales');
+    const modalCredenciales = document.getElementById('modalCredenciales');
+    const btnCerrarCredenciales = document.getElementById('btnCerrarCredenciales');
+    const formCredenciales = document.getElementById('formCredenciales');
+    const btnGuardarCredenciales = document.getElementById('btnGuardarCredenciales');
+    const credErrorMsg = document.getElementById('credErrorMsg');
+    const credSuccessMsg = document.getElementById('credSuccessMsg');
+
+    btnAbrirCredenciales.addEventListener('click', () => {
+      credErrorMsg.classList.add('hidden');
+      credSuccessMsg.classList.add('hidden');
+      document.getElementById('nuevoUsuario').value = currentUser.usuarioLogin || currentUser.nombre;
+      document.getElementById('nuevaPassword').value = '';
+      modalCredenciales.classList.remove('hidden');
+    });
+
+    btnCerrarCredenciales.addEventListener('click', () => {
+      modalCredenciales.classList.add('hidden');
+    });
+
+    formCredenciales.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      credErrorMsg.classList.add('hidden');
+      credSuccessMsg.classList.add('hidden');
+
+      const nuevoUsuario = document.getElementById('nuevoUsuario').value.trim();
+      const nuevaPassword = document.getElementById('nuevaPassword').value.trim();
+
+      const btnHtml = btnGuardarCredenciales.innerHTML;
+      btnGuardarCredenciales.disabled = true;
+      btnGuardarCredenciales.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Guardando...';
+
+      try {
+        const response = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ 
+            action: 'actualizarCredenciales', 
+            email: currentUser.email,
+            nuevoUsuario: nuevoUsuario, 
+            nuevaPassword: nuevaPassword 
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+          currentUser.usuarioLogin = nuevoUsuario;
+          localStorage.setItem('appResiduosUser', JSON.stringify(currentUser));
+          
+          credSuccessMsg.classList.remove('hidden');
+          setTimeout(() => { modalCredenciales.classList.add('hidden'); }, 2000);
+        } else {
+          throw new Error(result.message || "Error al actualizar credenciales");
+        }
+      } catch (error) {
+        credErrorMsg.textContent = error.message || "Error al conectar. Intenta nuevamente.";
+        credErrorMsg.classList.remove('hidden');
+      } finally {
+        btnGuardarCredenciales.disabled = false;
+        btnGuardarCredenciales.innerHTML = btnHtml;
+      }
+    });
+
+    // ==========================================
+    // LOGICA DEL DASHBOARD (FILTROS Y GRÁFICOS)
+    // ==========================================
+    async function cargarDatosDashboard() {
+      const containerLoading = document.getElementById('dashboardLoading');
+      const containerContent = document.getElementById('dashboardContent');
+
+      containerContent.classList.add('hidden');
+      containerLoading.classList.remove('hidden');
+
+      try {
+        const response = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'getDatos' })
+        });
+        
+        const result = await response.json();
+        if (result.status === 'success') {
+          todosLosRegistros = result.data; 
+          datosCargados = true;
+          aplicarFiltros(); 
+        } else {
+          throw new Error(result.message || "Error al obtener datos");
+        }
+      } catch (error) {
+        console.error("Error Dashboard:", error);
+        alert("No se pudieron cargar los datos del Dashboard.");
+      } finally {
+        containerLoading.classList.add('hidden');
+        containerContent.classList.remove('hidden');
+      }
+    }
+
+    function parseFechaBD(fechaStr) {
+      if (!fechaStr) return new Date('1900-01-01');
+      const partes = String(fechaStr).split('/');
+      if (partes.length === 3) {
+        return new Date(partes[2], partes[1] - 1, partes[0]);
+      }
+      return new Date(fechaStr); 
+    }
+
+    function aplicarFiltros() {
+      if (!datosCargados) return;
+
+      const fInicioStr = document.getElementById('filtroFechaInicio').value;
+      const fFinStr = document.getElementById('filtroFechaFin').value;
+      const filtroArea = document.getElementById('filtroArea').value;
+      const filtroTipo = document.getElementById('filtroTipo').value;
+
+      const fInicio = fInicioStr ? new Date(`${fInicioStr}T00:00:00`) : new Date('1900-01-01');
+      const fFin = fFinStr ? new Date(`${fFinStr}T23:59:59`) : new Date('2100-01-01');
+
+      const registrosFiltrados = todosLosRegistros.filter(reg => {
+        if (filtroArea !== 'TODAS' && reg.area !== filtroArea) return false;
+        if (filtroTipo !== 'TODOS' && reg.tipo !== filtroTipo) return false;
+        const fechaReg = parseFechaBD(reg.fecha);
+        if (fechaReg < fInicio || fechaReg > fFin) return false;
+        return true; 
+      });
+
+      procesarDatosParaGraficos(registrosFiltrados);
+    }
+
+    function procesarDatosParaGraficos(registros) {
+      let totalPeso = 0;
+      let totalBolsas = 0;
+      let areasAgrupadas = {};
+      let tiposAgrupados = {};
+
+      registros.forEach(reg => {
+        const pesoNumerico = Number(reg.peso) || 0;
+        const bolsasNumericas = Number(reg.bolsas) || 0;
+        
+        totalPeso += pesoNumerico;
+        totalBolsas += bolsasNumericas;
+
+        if (areasAgrupadas[reg.area]) {
+          areasAgrupadas[reg.area] += pesoNumerico;
+        } else {
+          areasAgrupadas[reg.area] = pesoNumerico;
+        }
+
+        if (tiposAgrupados[reg.tipo]) {
+          tiposAgrupados[reg.tipo] += pesoNumerico;
+        } else {
+          tiposAgrupados[reg.tipo] = pesoNumerico;
+        }
+      });
+
+      // Filtro estricto: Solo mantener áreas y tipos que sean mayores que 0 en el filtrado actual
+      const areasKeys = Object.keys(areasAgrupadas).filter(k => areasAgrupadas[k] > 0).sort((a,b) => areasAgrupadas[b] - areasAgrupadas[a]);
+      const areasValues = areasKeys.map(k => areasAgrupadas[k].toFixed(2));
+      // Convertir a matriz para que la etiqueta de la barra sea multilínea (Nombre arriba, valor abajo)
+      const areasLabelsMulti = areasKeys.map((k, i) => [k, `${areasValues[i]} kg`]);
+
+      const tiposKeys = Object.keys(tiposAgrupados).filter(k => tiposAgrupados[k] > 0);
+      const tiposValues = tiposKeys.map(k => tiposAgrupados[k].toFixed(2));
+      // Agregar los valores numéricos al lado del nombre en la leyenda de la Dona
+      const tiposLabelsMulti = tiposKeys.map((k, i) => `${k}: ${tiposValues[i]} kg`);
+
+      document.getElementById('kpiPeso').textContent = totalPeso.toFixed(2) + ' kg';
+      document.getElementById('kpiBolsas').textContent = totalBolsas;
+      document.getElementById('kpiRegistros').textContent = registros.length;
+
+      dibujarGraficoAreas(areasLabelsMulti, areasValues);
+      dibujarGraficoTipos(tiposLabelsMulti, tiposValues);
+    }
+
+    // Configuración general global de Chart.js para impresión
+    Chart.defaults.font.family = 'sans-serif';
+
+    function dibujarGraficoAreas(labels, data) {
+      const ctx = document.getElementById('chartArea').getContext('2d');
+      if (chartAreaInstancia) chartAreaInstancia.destroy();
+
+      chartAreaInstancia = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Kg de Residuos',
+            data: data,
+            backgroundColor: 'rgba(34, 197, 94, 0.8)',
+            borderColor: 'rgb(22, 163, 74)',
+            borderWidth: 1,
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { 
+            legend: { display: false }
+          },
+          scales: { 
+            y: { 
+              beginAtZero: true
+            },
+            x: {
+              ticks: {
+                font: { weight: '600' } // Resaltar las etiquetas del eje X
+              }
+            }
+          },
+          animation: false // Deshabilitar animación previene problemas al imprimir
+        }
+      });
+    }
+
+    function dibujarGraficoTipos(labels, data) {
+      const ctx = document.getElementById('chartTipo').getContext('2d');
+      if (chartTipoInstancia) chartTipoInstancia.destroy();
+
+      // Mapear por coincidencia parcial, ya que ahora las labels tienen el número concatenado
+      const coloresTipos = labels.map(tipo => {
+        if(tipo.includes('Organico')) return '#22c55e'; 
+        if(tipo.includes('Plastico')) return '#3b82f6'; 
+        if(tipo.includes('Carton/Papel')) return '#eab308'; 
+        return '#6b7280'; 
+      });
+
+      chartTipoInstancia = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: data,
+            backgroundColor: coloresTipos,
+            borderWidth: 2,
+            hoverOffset: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { 
+            legend: { 
+              position: 'bottom' // Movemos la leyenda abajo para dar más espacio horizontal
+            }
+          },
+          animation: false
+        }
+      });
+    }
+
+    // ==========================================
+    // IMPRIMIR REPORTE (NUEVO FORMATO HACCP CORPORATIVO)
+    // ==========================================
+    document.getElementById('btnPrint').addEventListener('click', () => {
+      // Extraer datos de los filtros seleccionados
+      const selArea = document.getElementById('filtroArea');
+      const selTipo = document.getElementById('filtroTipo');
+
+      document.getElementById('printFInicio').textContent = document.getElementById('filtroFechaInicio').value;
+      document.getElementById('printFFin').textContent = document.getElementById('filtroFechaFin').value;
+      document.getElementById('printFArea').textContent = selArea.options[selArea.selectedIndex].text;
+      document.getElementById('printFTipo').textContent = selTipo.options[selTipo.selectedIndex].text;
+      
+      const creadorInfo = `${currentUser.nombre} (${currentUser.rol || 'Supervisor'})`;
+      
+      // Asignar nombre en la caja de firma
+      document.getElementById('printFirmaNombre').textContent = currentUser.nombre;
+
+      // Disparar diálogo de impresión nativo
+      window.print();
+    });
+
+    // ==========================================
+    // MANEJO DE IMAGEN Y VISTA PREVIA
+    // ==========================================
+    const imagenInput = document.getElementById('imagen');
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+    const imagePlaceholder = document.getElementById('imagePlaceholder');
+    const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+    const imagePreview = document.getElementById('imagePreview');
+    const removeImageBtn = document.getElementById('removeImageBtn');
+    
+    let imageBase64 = '';
+    let imageMimeType = '';
+    let imageName = '';
+    
+    imagenInput.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        fileNameDisplay.textContent = file.name;
+        imageName = file.name;
+        imageMimeType = file.type;
+        const reader = new FileReader();
+        reader.onload = function(readerEvent) {
+          const dataUrl = readerEvent.target.result;
+          imagePreview.src = dataUrl;
+          imagePlaceholder.classList.add('hidden');
+          imagePreviewContainer.classList.remove('hidden');
+          imagePreviewContainer.classList.add('flex');
+          imageBase64 = dataUrl.split(',')[1];
+        }
+        reader.readAsDataURL(file);
+      } else {
+        resetImageUI();
+      }
+    });
+    
+    removeImageBtn.addEventListener('click', () => {
+      resetImageUI();
+    });
+
+    function resetImageUI() {
+      imagenInput.value = '';
+      imagePreview.src = '';
+      imagePlaceholder.classList.remove('hidden');
+      imagePreviewContainer.classList.add('hidden');
+      imagePreviewContainer.classList.remove('flex');
+      imageBase64 = '';
+      imageMimeType = '';
+      imageName = '';
+    }
+
+    // ==========================================
+    // ENVÍO DEL FORMULARIO
+    // ==========================================
+    const form = document.getElementById('residuosForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const successMessage = document.getElementById('successMessage');
+    const registrosContainer = document.getElementById('registrosContainer');
+    
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const btnOriginalHtml = submitBtn.innerHTML;
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="ph ph-spinner ph-spin text-xl"></i> <span>Guardando...</span>';
+      
+      const timestampVal = document.getElementById('timestamp').value.trim();
+      const parts = timestampVal.split(' ');
+      const fechaVal = parts[0] || '';
+      const horaVal = parts.slice(1).join(' ') || '';
+      
+      const formData = {
+        action: 'registrar',
+        supervisor: document.getElementById('supervisor').value,
+        area: document.getElementById('area').value,
+        tipo: document.getElementById('tipo').value,
+        peso: document.getElementById('peso').value,
+        bolsas: document.getElementById('bolsas').value,
+        fecha: fechaVal,
+        hora: horaVal,
+        observaciones: document.getElementById('observaciones').value,
+        imagenBase64: imageBase64,
+        imagenMimeType: imageMimeType,
+        imagenNombre: imageName
+      };
+
+      try {
+        const response = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(formData)
+        });
+        
+        const result = await response.json();
+        if (result.status !== 'success') {
+          throw new Error(result.message || "Error desconocido al guardar en servidor");
+        }
+
+        agregarRegistroAUi(formData);
+        mostrarExito();
+        limpiarFormulario();
+        
+        datosCargados = false; 
+        
+      } catch (error) {
+        console.error("Error al guardar:", error);
+        alert("Hubo un error al guardar el registro. Intente nuevamente.");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = btnOriginalHtml;
+      }
+    });
+
+    // ==========================================
+    // FUNCIONES AUXILIARES
+    // ==========================================
+    function agregarRegistroAUi(data) {
+      if (registrosContainer.querySelector('.italic')) {
+        registrosContainer.innerHTML = '';
+      }
+      const colorTipo = data.tipo === 'Organico' ? 'bg-green-100 text-green-700' :
+        data.tipo === 'Plastico' ? 'bg-blue-100 text-blue-700' :
+        'bg-gray-200 text-gray-700';
+      const supervisorCorto = data.supervisor.split('@')[0];
+      const idSimulado = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+      const fotoIcon = data.imagenBase64 ? '<i class="ph-fill ph-image text-green-500" title="Foto adjunta"></i>' : '';
+      const html = `
+                <div class="p-4 rounded-lg border border-gray-100 bg-gray-50 hover:bg-gray-100 transition-colors fade-in">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-xs font-mono text-gray-500">#${idSimulado} ${fotoIcon}</span>
+                        <span class="text-xs px-2 py-1 rounded-full font-medium ${colorTipo}">${data.tipo}</span>
+                    </div>
+                    <p class="font-medium text-gray-900">${data.area}</p>
+                    <div class="mt-2 text-sm text-gray-600 flex justify-between">
+                        <span>${data.peso} kg</span>
+                        <span>${data.bolsas} bolsa(s)</span>
+                    </div>
+                    <div class="mt-2 text-xs text-gray-500 flex justify-between items-center border-t border-gray-200 pt-2">
+                        <span class="truncate max-w-[120px]" title="${data.supervisor}">${supervisorCorto}</span>
+                        <span>${data.fecha} ${data.hora}</span>
+                    </div>
+                </div>
+            `;
+      registrosContainer.insertAdjacentHTML('afterbegin', html);
+    }
+
+    function mostrarExito() {
+      successMessage.classList.remove('opacity-0');
+      setTimeout(() => {
+        successMessage.classList.add('opacity-0');
+      }, 3000);
+    }
+
+    function limpiarFormulario() {
+      document.getElementById('peso').value = '';
+      document.getElementById('bolsas').value = '1';
+      document.getElementById('observaciones').value = '';
+      actualizarTimestamp();
+      resetImageUI();
+    }
+  </script>
+  <style>
+    .fade-in {
+      animation: fadeIn 0.4s ease-in-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ESTILOS DE IMPRESIÓN BASADOS EN LA PLANTILLA CORPORATIVA HACCP */
+    @media print {
+      body {
+        background-color: white !important;
+        margin: 0;
+        padding: 0;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        font-family: 'Roboto', sans-serif !important;
+        color: #333 !important;
+      }
+      #appContainer {
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+      }
+      .print\:hidden {
+        display: none !important;
+      }
+      .print\:block {
+        display: block !important;
+      }
+      /* Limpiar bordes redondeados y sombras para impresión tipo documento formal */
+      .shadow-sm, .shadow-lg { box-shadow: none !important; }
+      .rounded-xl, .rounded-lg, .rounded-full, .rounded-md { border-radius: 0 !important; }
+      .bg-white { background-color: transparent !important; }
+      
+      /* --- ESTILOS EXTRAÍDOS DE LA PLANTILLA DEL PDF --- */
+      .haccp-print-container {
+        display: block !important;
+        width: 100%;
+      }
+      .header-flex-container {
+        display: flex;
+        align-items: stretch;
+        justify-content: space-between;
+        margin-bottom: 2px;
+        padding-bottom: 2px;
+        padding-top: 5px;
+        border-top: 2px solid #e0e0e0;
+        border-bottom: 2px solid #e0e0e0;
+      }
+      .header-flex-container .logo {
+        align-items: center;
+        width: 120px;
+        height: auto;
+        margin-right: 10px;
+        flex-shrink: 0;
+        object-fit: contain;
+      }
+      .header-text-wrapper {
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+      }
+      .header-title {
+        flex-grow: 1;
+        text-align: center;
+        font-size: 1.1em;
+        font-weight: 700;
+        color: #2c3e50;
+        line-height: 1.2;
+        padding-bottom: 4px;
+        margin-bottom: 1px;
+        border-bottom: 1px dashed #ccc;
+      }
+      .template-details {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.75em;
+        margin-bottom: 0px;
+        padding: 2px 0;
+        border-bottom: 1px dashed #ccc;
+      }
+      .template-details:last-of-type {
+        border-bottom: none;
+        margin-bottom: 0;
+      }
+      .template-details div { flex: 1; text-align: center; }
+      .template-details div:first-child { text-align: left; }
+      .template-details div:last-child { text-align: right; }
+
+      .section-info {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 15px;
+        margin-bottom: 15px;
+        font-size: 0.9em;
+        font-weight: 400;
+        color: #555;
+      }
+      .section-info div {
+        padding: 5px 10px;
+        background-color: #f0f0f0 !important;
+        border-radius: 5px;
+        flex-grow: 1;
+        margin: 0 10px;
+        text-align: left;
+      }
+      .section-info div:first-child { margin-left: 0; }
+      .section-info div:last-child { margin-right: 0; }
+
+      .bottom-sections-wrapper {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-top: 20px;
+        margin-bottom: 30px;
+        break-inside: avoid;
+        page-break-before: auto;
+      }
+      .notes-section {
+        color: #666;
+        font-size: 0.80em;
+        flex: 3;
+        margin-right: 30px;
+        margin-top: 0;
+        margin-bottom: 0;
+      }
+      .signature-section {
+        flex: 1;
+        margin-top: 0;
+        margin-bottom: 0;
+        display: flex;
+        justify-content: flex-end;
+      }
+      .notes-section ul { list-style: none; padding: 0; margin: 0; }
+      .notes-section li { margin-bottom: 4px; }
+      .notes-box {
+        width: auto;
+        border: 1px solid #ccc;
+        padding: 15px;
+        text-align: left;
+        border-radius: 5px;
+        background-color: #fafafa !important;
+      }
+      .notes-box table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 5px;
+        margin-bottom: 10px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+      }
+      .notes-box th, .notes-box td {
+        border: 1px solid #ddd;
+        padding: 4px 5px;
+        text-align: left;
+        font-size: 0.95em;
+      }
+      .notes-box th {
+        font-weight: 400;
+        text-transform: uppercase;
+      }
+      
+      .signature-box {
+        width: 100%;
+        border: 1px solid #ccc;
+        padding: 15px;
+        text-align: center;
+        border-radius: 5px;
+        background-color: #fafafa !important;
+      }
+      .signature-box .signature-area {
+        border-bottom: 1px dashed #999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 60px; /* Altura para la firma física */
+        margin-bottom: 8px;
+      }
+      .signature-box .label {
+        font-weight: 600;
+        color: #555;
+        text-transform: uppercase;
+        font-size: 0.85em;
+      }
+
+      /* FORZAR LA CUADRÍCULA DE KPIs Y GRÁFICOS (FLEXBOX PARA EVITAR DESBORDES) */
+      #printKpiGrid {
+        display: flex !important;
+        flex-direction: row !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+        gap: 1rem !important;
+        margin-bottom: 1.5rem !important;
+        page-break-inside: avoid !important;
+      }
+      #printKpiGrid > div {
+        flex: 1 !important;
+        border: 0px solid #ccc !important;
+        padding: 1px !important;
+      }
+      
+      #printChartGrid {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important; /* Fuerza a que queden uno al lado del otro */
+        justify-content: space-between !important;
+        width: 100% !important;
+        gap: 1rem !important;
+        page-break-inside: avoid !important;
+      }
+      #printChartGrid > div {
+        flex: 1 1 48% !important; /* Cada gráfico toma 48% del ancho */
+        width: 48% !important;
+        border: 0px solid #ccc !important;
+        padding: 0 !important;
+      }
+      
+      /* Ajustar y limitar la altura del Canvas para evitar que se desborde al imprimir */
+      #printChartGrid .relative {
+        height: 220px !important;
+        width: 100% !important;
+      }
+      #printChartGrid canvas {
+        max-width: 100% !important;
+        max-height: 100% !important;
+        width: 100% !important;
+        height: 100% !important;
+      }
+      
+      /* Ajustes de página general */
+      @page {
+        size: auto;
+        margin: 0.0cm 1.0cm;
+      }
+    }
+  </style>
+</body>
+
+</html>
