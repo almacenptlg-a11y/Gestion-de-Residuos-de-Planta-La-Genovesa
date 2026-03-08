@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Registro de Residuos La Genovesa Agroindustrias S.A.</title>
+  <title>Registro de Residuos</title>
   <!-- Tailwind CSS para los estilos -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Phosphor Icons para los íconos -->
@@ -27,7 +27,7 @@
         <div class="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
           <i class="ph-fill ph-leaf text-green-600 text-3xl"></i>
         </div>
-        <h1 class="text-2xl font-bold text-gray-900">Gestión de Residuos de Planta "La Genovesa Agroindustrias S.A."</h1>
+        <h1 class="text-2xl font-bold text-gray-900">Bienvenido</h1>
         <p class="text-gray-500 text-sm mt-1">Ingresa tus credenciales para continuar</p>
       </div>
 
@@ -453,6 +453,39 @@
     </div>
   </div>
 
+  <!-- ========================================== -->
+  <!-- MODAL COMPLETAR PERFIL FALTANTE -->
+  <!-- ========================================== -->
+  <div id="modalCompletarPerfil" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-lg w-full max-w-sm overflow-hidden">
+      <div class="bg-blue-50 border-b border-blue-100 px-6 py-4 flex items-center gap-2">
+        <i class="ph-fill ph-user-circle-plus text-xl text-blue-600"></i>
+        <h3 class="text-lg font-bold text-gray-900">Completa tu perfil</h3>
+      </div>
+      <div class="p-6 text-sm text-gray-600 pb-0">
+        Para continuar y acceder al sistema, necesitamos que registres tu nombre y correo electrónico.
+      </div>
+      <form id="formCompletarPerfil" class="p-6 space-y-4 pt-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
+          <input type="text" id="perfilNombre" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Correo Electrónico</label>
+          <input type="email" id="perfilEmail" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+        </div>
+        
+        <div id="perfilErrorMsg" class="hidden text-red-600 text-sm bg-red-50 p-2 rounded border border-red-100"></div>
+        
+        <div class="flex justify-end pt-4">
+          <button type="submit" id="btnGuardarPerfil" class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
+            Guardar y Continuar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
     // ==========================================
     // CONFIGURACIÓN DE GOOGLE APPS SCRIPT
@@ -652,6 +685,16 @@
           currentUser = result.user; 
           localStorage.setItem('appResiduosUser', JSON.stringify(currentUser));
           mostrarAplicacion();
+        } else if (result.status === 'incomplete_profile') {
+          // El usuario es correcto, pero faltan sus datos
+          currentUser = result.user; // Guardamos lo que haya en la variable temporal
+          
+          // Pre-llenamos el modal con los datos que sí existan
+          document.getElementById('perfilNombre').value = currentUser.nombre || '';
+          document.getElementById('perfilEmail').value = currentUser.email || '';
+          
+          // Mostramos el modal para completar datos
+          document.getElementById('modalCompletarPerfil').classList.remove('hidden');
         } else {
           throw new Error(result.message || "Credenciales incorrectas");
         }
@@ -685,6 +728,59 @@
       document.getElementById('displayUserRole').textContent = currentUser.rol || "Supervisor";
       document.getElementById('supervisor').value = currentUser.email;
     }
+
+    // ==========================================
+    // MANEJO DE COMPLETAR PERFIL
+    // ==========================================
+    const formCompletarPerfil = document.getElementById('formCompletarPerfil');
+    const btnGuardarPerfil = document.getElementById('btnGuardarPerfil');
+    const perfilErrorMsg = document.getElementById('perfilErrorMsg');
+
+    formCompletarPerfil.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      perfilErrorMsg.classList.add('hidden');
+
+      const nombreVal = document.getElementById('perfilNombre').value.trim();
+      const emailVal = document.getElementById('perfilEmail').value.trim();
+
+      const btnHtml = btnGuardarPerfil.innerHTML;
+      btnGuardarPerfil.disabled = true;
+      btnGuardarPerfil.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Guardando...';
+
+      try {
+        const response = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'completarPerfil',
+            usuario: currentUser.usuarioLogin, // Usamos el login que comprobamos que existe
+            nombre: nombreVal,
+            email: emailVal
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+          // Actualizar el estado local
+          currentUser.nombre = nombreVal;
+          currentUser.email = emailVal;
+          localStorage.setItem('appResiduosUser', JSON.stringify(currentUser));
+
+          // Esconder el modal y dejarlo entrar a la App
+          document.getElementById('modalCompletarPerfil').classList.add('hidden');
+          mostrarAplicacion();
+        } else {
+          throw new Error(result.message || "No se pudo actualizar el perfil.");
+        }
+      } catch (error) {
+        perfilErrorMsg.textContent = error.message || "Error de conexión. Intenta nuevamente.";
+        perfilErrorMsg.classList.remove('hidden');
+      } finally {
+        btnGuardarPerfil.disabled = false;
+        btnGuardarPerfil.innerHTML = btnHtml;
+      }
+    });
 
     // ==========================================
     // MANEJO DE CREDENCIALES
