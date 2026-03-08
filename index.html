@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Registro de Residuos</title>
+  <title>Registro de Residuos La Genovesa Agroindustrias S.A.</title>
   <!-- Tailwind CSS para los estilos -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Phosphor Icons para los íconos -->
@@ -27,7 +27,7 @@
         <div class="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
           <i class="ph-fill ph-leaf text-green-600 text-3xl"></i>
         </div>
-        <h1 class="text-2xl font-bold text-gray-900">Bienvenido</h1>
+        <h1 class="text-2xl font-bold text-gray-900">Gestión de Residuos de Planta "La Genovesa Agroindustrias S.A."</h1>
         <p class="text-gray-500 text-sm mt-1">Ingresa tus credenciales para continuar</p>
       </div>
 
@@ -174,7 +174,7 @@
               <label class="text-sm font-medium text-gray-700 flex items-center gap-2">
                 <i class="ph ph-camera text-gray-400 text-lg"></i> Evidencia Fotográfica
               </label>
-              <div class="mt-1 p-4 border-2 border-gray-300 border-dashed rounded-lg hover:border-green-500 transition-colors bg-gray-50 flex flex-col items-center justify-center min-h-[160px]">
+              <div class="mt-1 p-4 border-2 border-gray-300 border-dashed rounded-lg hover:border-green-500 transition-colors bg-gray-50 flex flex-col items-center justify-center min-h-[160px] relative">
                 <div id="imagePlaceholder" class="space-y-2 text-center w-full">
                   <i class="ph ph-camera mx-auto text-4xl text-gray-400"></i>
                   <div class="flex text-sm text-gray-600 justify-center">
@@ -188,9 +188,12 @@
                 <div id="imagePreviewContainer" class="hidden flex-col items-center w-full">
                   <img id="imagePreview" src="" alt="Vista previa de evidencia" class="max-h-48 object-contain rounded-md shadow-sm border border-gray-200 mb-3">
                   <p id="fileNameDisplay" class="text-sm font-medium text-green-600 truncate max-w-[250px] mb-2"></p>
-                  <button type="button" id="removeImageBtn" class="text-sm text-red-500 hover:text-red-700 font-medium flex items-center gap-1 px-3 py-1 rounded-md hover:bg-red-50 transition-colors">
-                    <i class="ph ph-trash"></i> Eliminar foto
-                  </button>
+                  
+                  <div class="flex gap-2">
+                    <button type="button" id="removeImageBtn" class="text-sm text-red-500 hover:text-red-700 font-medium flex items-center gap-1 px-3 py-2 rounded-md hover:bg-red-50 transition-colors border border-transparent hover:border-red-100">
+                      <i class="ph ph-trash"></i> Eliminar foto
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -395,24 +398,6 @@
           <div class="bottom-sections-wrapper">
               <div class="notes-section">
                   <div class="notes-box">
-                      <!--     <table>
-                          <thead>
-                              <tr>
-                                  <th style="border-right: 1px solid #ddd; background-color: #0056B3; color: white;">Estado MP</th>
-                                  <th style="border-right: 1px solid #ddd; background-color: #0056B3; color: white;">Criterio</th>
-                                  <th style="border-right: 1px solid #ddd; background-color: #0056B3; color: white;">Límites críticos</th>
-                                  <th style="background-color: #0056B3; color: white;">Observaciones</th>
-                              </tr>
-                          </thead>
-                          <tbody>
-                              <tr>
-                                  <td style="border-right: 1px solid #ddd;"><strong>Materia Prima Congelada</strong></td>
-                                  <td style="border-right: 1px solid #ddd;">Temperatura</td>
-                                  <td style="border-right: 1px solid #ddd;">≥ -18°C / ≤ -12°C</td>
-                                  <td>Fuera de este rango, **NO SE PERMITE EL INGRESO**.</td>
-                              </tr>
-                          </tbody>
-                      </table>            -->
                       <ul>
                           <li>El residuo debe estar siempre segregado por tipo.</li>
                           <li>Ante cualquier incidencia reportar a Jefatura de AGCC</li>
@@ -485,16 +470,14 @@
     let registrosFiltradosActuales = []; // Guarda los datos filtrados para exportación
     
     // ==========================================
-    // UTILIDADES DE FORMATO DE FECHA, HORA E IMAGEN
+    // UTILIDADES DE EXTRACCIÓN Y FORMATO 
     // ==========================================
     function formatearFechaEstandar(fechaStr) {
       if (!fechaStr || fechaStr === '-') return '-';
       if (fechaStr.includes('T')) fechaStr = fechaStr.split('T')[0];
       const partes = fechaStr.split(/[-/]/);
       if (partes.length === 3) {
-        // Si tiene formato YYYY-MM-DD
         if (partes[0].length === 4) return `${partes[2]}/${partes[1]}/${partes[0]}`;
-        // Si ya es DD/MM/YYYY
         return `${partes[0].padStart(2, '0')}/${partes[1].padStart(2, '0')}/${partes[2]}`;
       }
       return fechaStr;
@@ -502,14 +485,11 @@
 
     function formatearHora24(horaStr) {
       if (!horaStr || horaStr === '-') return '-';
-      
       horaStr = String(horaStr).trim();
       const lowerHora = horaStr.toLowerCase();
-      
       const isPM = lowerHora.includes('pm');
       const isAM = lowerHora.includes('am');
       
-      // Limpiar letras (am/pm)
       let timeStr = lowerHora.replace(/[a-z]/ig, '').trim(); 
       let partes = timeStr.split(':');
       
@@ -519,7 +499,6 @@
         const s = (partes[2] || '00').replace(/[^0-9]/g, '').padStart(2, '0');
         
         if (isNaN(h)) return horaStr;
-
         if (isPM && h < 12) h += 12;
         if (isAM && h === 12) h = 0;
         
@@ -528,26 +507,47 @@
       return horaStr;
     }
 
+    // Búsqueda inteligente para Imagen sin importar mayúsculas/minúsculas ni formato de link
     function obtenerUrlImagen(reg) {
       if (!reg) return '';
       
-      // 1. Intentar claves predecibles
-      if (reg.imagenUrl && String(reg.imagenUrl).startsWith('http')) return reg.imagenUrl;
-      if (reg.evidenciaUrl && String(reg.evidenciaUrl).startsWith('http')) return reg.evidenciaUrl;
-      if (reg.imagen && String(reg.imagen).startsWith('http')) return reg.imagen;
-      if (reg.foto && String(reg.foto).startsWith('http')) return reg.foto;
-
-      // 2. Búsqueda dinámica profunda (por si la cabecera del Excel/Base de Datos tiene otro nombre)
+      // Coincidencias exactas primero
+      if (reg['IMAGEN']) return String(reg['IMAGEN']);
+      if (reg['Imagen']) return String(reg['Imagen']);
+      if (reg['imagen']) return String(reg['imagen']);
+      
+      // Búsqueda profunda e insensible a mayúsculas
       for (const key in reg) {
-        const val = reg[key];
-        if (typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://'))) {
-           const kLower = key.toLowerCase();
-           if (kLower.includes('imagen') || kLower.includes('foto') || kLower.includes('evidencia') || kLower.includes('url') || kLower.includes('adjunto') || kLower.includes('link')) {
-               return val;
+        const kLower = key.toLowerCase();
+        if (kLower.includes('imagen') || kLower.includes('foto') || kLower.includes('link') || kLower.includes('url')) {
+           const val = reg[key];
+           if (val && String(val).trim() !== '') {
+               return String(val);
            }
         }
       }
-      return ''; // Retorna vacío si no se encuentra enlace
+      return '';
+    }
+
+    // Búsqueda inteligente para Observaciones incluso si tiene ":" al final
+    function obtenerObservaciones(reg) {
+      if (!reg) return '';
+      
+      // Coincidencias exactas (Revisando los : que se ven en el Excel)
+      if (reg['OBSERVACIONES:'] !== undefined) return reg['OBSERVACIONES:'];
+      if (reg['OBSERVACIONES'] !== undefined) return reg['OBSERVACIONES'];
+      if (reg['observaciones:'] !== undefined) return reg['observaciones:'];
+      if (reg['observaciones'] !== undefined) return reg['observaciones'];
+      if (reg['Observaciones'] !== undefined) return reg['Observaciones'];
+
+      // Búsqueda profunda
+      for (const key in reg) {
+        const kLower = key.toLowerCase();
+        if (kLower.includes('observacion') || kLower.includes('detalle') || kLower.includes('comentario')) {
+           return reg[key] || '';
+        }
+      }
+      return '';
     }
 
     // ==========================================
@@ -559,7 +559,6 @@
       const month = String(now.getMonth() + 1).padStart(2, '0');
       const year = now.getFullYear();
       
-      // Formato puro 24 hrs
       const hours24 = String(now.getHours()).padStart(2, '0');
       const minutes = String(now.getMinutes()).padStart(2, '0');
       const seconds = String(now.getSeconds()).padStart(2, '0');
@@ -809,14 +808,20 @@
       const fFin = fFinStr ? new Date(`${fFinStr}T23:59:59`) : new Date('2100-01-01');
 
       const registrosFiltrados = todosLosRegistros.filter(reg => {
-        if (filtroArea !== 'TODAS' && reg.area !== filtroArea) return false;
-        if (filtroTipo !== 'TODOS' && reg.tipo !== filtroTipo) return false;
-        const fechaReg = parseFechaBD(reg.fecha);
+        // Soporte robusto por si Apps Script manda las cabeceras en MAYÚSCULAS
+        const rArea = reg.area || reg.AREA;
+        const rTipo = reg.tipo || reg.TIPO;
+        const rFecha = reg.fecha || reg.FECHA;
+        
+        if (filtroArea !== 'TODAS' && rArea !== filtroArea) return false;
+        if (filtroTipo !== 'TODOS' && rTipo !== filtroTipo) return false;
+        
+        const fechaReg = parseFechaBD(rFecha);
         if (fechaReg < fInicio || fechaReg > fFin) return false;
         return true; 
       });
 
-      registrosFiltradosActuales = registrosFiltrados; // Guardamos globalmente para poder exportar a excel
+      registrosFiltradosActuales = registrosFiltrados; 
       procesarDatosParaGraficos(registrosFiltrados);
     }
 
@@ -827,34 +832,34 @@
       let tiposAgrupados = {};
 
       registros.forEach(reg => {
-        const pesoNumerico = Number(reg.peso) || 0;
-        const bolsasNumericas = Number(reg.bolsas) || 0;
+        // Extracción robusta mayúsculas/minúsculas
+        const rPeso = Number(reg.peso || reg.PESO) || 0;
+        const rBolsas = Number(reg.bolsas || reg['BOLSAS USADAS'] || reg.BOLSAS_USADAS) || 0;
+        const rArea = reg.area || reg.AREA;
+        const rTipo = reg.tipo || reg.TIPO;
         
-        totalPeso += pesoNumerico;
-        totalBolsas += bolsasNumericas;
+        totalPeso += rPeso;
+        totalBolsas += rBolsas;
 
-        if (areasAgrupadas[reg.area]) {
-          areasAgrupadas[reg.area] += pesoNumerico;
+        if (areasAgrupadas[rArea]) {
+          areasAgrupadas[rArea] += rPeso;
         } else {
-          areasAgrupadas[reg.area] = pesoNumerico;
+          areasAgrupadas[rArea] = rPeso;
         }
 
-        if (tiposAgrupados[reg.tipo]) {
-          tiposAgrupados[reg.tipo] += pesoNumerico;
+        if (tiposAgrupados[rTipo]) {
+          tiposAgrupados[rTipo] += rPeso;
         } else {
-          tiposAgrupados[reg.tipo] = pesoNumerico;
+          tiposAgrupados[rTipo] = rPeso;
         }
       });
 
-      // Filtro estricto: Solo mantener áreas y tipos que sean mayores que 0 en el filtrado actual
       const areasKeys = Object.keys(areasAgrupadas).filter(k => areasAgrupadas[k] > 0).sort((a,b) => areasAgrupadas[b] - areasAgrupadas[a]);
       const areasValues = areasKeys.map(k => areasAgrupadas[k].toFixed(2));
-      // Convertir a matriz para que la etiqueta de la barra sea multilínea (Nombre arriba, valor abajo)
       const areasLabelsMulti = areasKeys.map((k, i) => [k, `${areasValues[i]} kg`]);
 
       const tiposKeys = Object.keys(tiposAgrupados).filter(k => tiposAgrupados[k] > 0);
       const tiposValues = tiposKeys.map(k => tiposAgrupados[k].toFixed(2));
-      // Agregar los valores numéricos al lado del nombre en la leyenda de la Dona
       const tiposLabelsMulti = tiposKeys.map((k, i) => `${k}: ${tiposValues[i]} kg`);
 
       document.getElementById('kpiPeso').textContent = totalPeso.toFixed(2) + ' kg';
@@ -865,7 +870,7 @@
       dibujarGraficoTipos(tiposLabelsMulti, tiposValues);
     }
 
-    // Configuración general global de Chart.js para impresión
+    // Configuración general global de Chart.js
     Chart.defaults.font.family = 'sans-serif';
 
     function dibujarGraficoAreas(labels, data) {
@@ -892,16 +897,10 @@
             legend: { display: false }
           },
           scales: { 
-            y: { 
-              beginAtZero: true
-            },
-            x: {
-              ticks: {
-                font: { weight: '600' } // Resaltar las etiquetas del eje X
-              }
-            }
+            y: { beginAtZero: true },
+            x: { ticks: { font: { weight: '600' } } }
           },
-          animation: false // Deshabilitar animación previene problemas al imprimir
+          animation: false
         }
       });
     }
@@ -910,11 +909,10 @@
       const ctx = document.getElementById('chartTipo').getContext('2d');
       if (chartTipoInstancia) chartTipoInstancia.destroy();
 
-      // Mapear por coincidencia parcial, ya que ahora las labels tienen el número concatenado
       const coloresTipos = labels.map(tipo => {
-        if(tipo.includes('Organico')) return '#22c55e'; 
-        if(tipo.includes('Plastico')) return '#3b82f6'; 
-        if(tipo.includes('Carton/Papel')) return '#eab308'; 
+        if(tipo.includes('Organico') || tipo.includes('ORGANICO')) return '#22c55e'; 
+        if(tipo.includes('Plastico') || tipo.includes('PLASTICO')) return '#3b82f6'; 
+        if(tipo.includes('Carton') || tipo.includes('CARTON')) return '#eab308'; 
         return '#6b7280'; 
       });
 
@@ -933,9 +931,7 @@
           responsive: true,
           maintainAspectRatio: false,
           plugins: { 
-            legend: { 
-              position: 'bottom' // Movemos la leyenda abajo para dar más espacio horizontal
-            }
+            legend: { position: 'bottom' }
           },
           animation: false
         }
@@ -951,55 +947,43 @@
         return;
       }
 
-      // Preparar los datos en un formato amigable para el Excel incluyendo las fechas correctas y el Link a la imagen
       const datosExcel = registrosFiltradosActuales.map(reg => {
-        // Encontrar la URL de la imagen independientemente de cómo se llame en la Base de Datos
+        // Uso de nuestras funciones hiper-robustas
         const linkImagen = obtenerUrlImagen(reg) || 'Sin Imagen';
+        const observacionesTxt = obtenerObservaciones(reg) || '';
         
         return {
-          'Fecha': formatearFechaEstandar(reg.fecha),
-          'Hora': formatearHora24(reg.hora),
-          'Supervisor': reg.supervisor || '-',
-          'Área': reg.area || '-',
-          'Tipo de Residuo': reg.tipo || '-',
-          'Peso (Kg)': reg.peso || 0,
-          'Bolsas Utilizadas': reg.bolsas || 0,
-          'Observaciones': reg.observaciones || '',
+          'Fecha': formatearFechaEstandar(reg.fecha || reg.FECHA),
+          'Hora': formatearHora24(reg.hora || reg.HORA),
+          'Supervisor': reg.supervisor || reg.SUPERVISOR || '-',
+          'Área': reg.area || reg.AREA || '-',
+          'Tipo de Residuo': reg.tipo || reg.TIPO || '-',
+          'Peso (Kg)': reg.peso || reg.PESO || 0,
+          'Bolsas Utilizadas': reg.bolsas || reg['BOLSAS USADAS'] || reg.BOLSAS_USADAS || 0,
+          'Observaciones': observacionesTxt,
           'Imagen (Link)': linkImagen
         };
       });
 
-      // Crear un libro de Excel y su hoja
       const worksheet = XLSX.utils.json_to_sheet(datosExcel);
       const workbook = XLSX.utils.book_new();
 
-      // Ajustar el ancho de las columnas
       const wscols = [
-        {wch: 12}, // Fecha
-        {wch: 10}, // Hora (24h suele requerir menos espacio)
-        {wch: 30}, // Supervisor
-        {wch: 20}, // Área
-        {wch: 20}, // Tipo Residuo
-        {wch: 12}, // Peso
-        {wch: 15}, // Bolsas
-        {wch: 40}, // Observaciones
-        {wch: 50}  // Imagen (Link)
+        {wch: 12}, {wch: 10}, {wch: 30}, {wch: 20}, {wch: 20},
+        {wch: 12}, {wch: 15}, {wch: 40}, {wch: 50}
       ];
       worksheet['!cols'] = wscols;
 
-      // Adjuntar la hoja al libro
       XLSX.utils.book_append_sheet(workbook, worksheet, "Residuos");
 
-      // Descargar el archivo
       const fechaHoy = new Date().toISOString().split('T')[0];
       XLSX.writeFile(workbook, `Reporte_Residuos_${fechaHoy}.xlsx`);
     });
 
     // ==========================================
-    // IMPRIMIR REPORTE (NUEVO FORMATO HACCP CORPORATIVO)
+    // IMPRIMIR REPORTE (NUEVO FORMATO HACCP)
     // ==========================================
     document.getElementById('btnPrint').addEventListener('click', () => {
-      // Extraer datos de los filtros seleccionados
       const selArea = document.getElementById('filtroArea');
       const selTipo = document.getElementById('filtroTipo');
 
@@ -1008,12 +992,8 @@
       document.getElementById('printFArea').textContent = selArea.options[selArea.selectedIndex].text;
       document.getElementById('printFTipo').textContent = selTipo.options[selTipo.selectedIndex].text;
       
-      const creadorInfo = `${currentUser.nombre} (${currentUser.rol || 'Supervisor'})`;
-      
-      // Asignar nombre en la caja de firma
       document.getElementById('printFirmaNombre').textContent = currentUser.nombre;
 
-      // Disparar diálogo de impresión nativo
       window.print();
     });
 
@@ -1065,6 +1045,7 @@
       imageBase64 = '';
       imageMimeType = '';
       imageName = '';
+      document.getElementById('observaciones').value = '';
     }
 
     // ==========================================
@@ -1082,7 +1063,6 @@
       submitBtn.disabled = true;
       submitBtn.innerHTML = '<i class="ph ph-spinner ph-spin text-xl"></i> <span>Guardando...</span>';
       
-      // Extraemos la fecha y hora directamente desde el input visual que ya está en dd/mm/yyyy y 24hrs
       const timestampVal = document.getElementById('timestamp').value.trim();
       const parts = timestampVal.split(' ');
       const fechaVal = parts[0] || '';
@@ -1130,9 +1110,6 @@
       }
     });
 
-    // ==========================================
-    // FUNCIONES AUXILIARES
-    // ==========================================
     function agregarRegistroAUi(data) {
       if (registrosContainer.querySelector('.italic')) {
         registrosContainer.innerHTML = '';
@@ -1143,8 +1120,7 @@
       const supervisorCorto = data.supervisor.split('@')[0];
       const idSimulado = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
       
-      const urlImagen = obtenerUrlImagen(data);
-      const fotoIcon = urlImagen || data.imagenBase64 ? '<i class="ph-fill ph-image text-green-500" title="Foto adjunta"></i>' : '';
+      const fotoIcon = data.imagenBase64 ? '<i class="ph-fill ph-image text-green-500" title="Foto adjunta"></i>' : '';
       
       const fechaMostrar = formatearFechaEstandar(data.fecha);
       const horaMostrar = formatearHora24(data.hora);
