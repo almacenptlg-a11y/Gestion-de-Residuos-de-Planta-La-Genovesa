@@ -11,6 +11,8 @@
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <!-- Chart.js para los gráficos del Dashboard -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- SheetJS para la exportación a Excel -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;600;700&display=swap" rel="stylesheet">
 </head>
 
@@ -289,9 +291,14 @@
         <!-- Barra Superior del Dashboard (Pantalla) -->
         <div class="flex justify-between items-center print:hidden">
           <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2"><i class="ph ph-chart-line-up text-green-600"></i> Análisis General</h2>
-          <button id="btnPrint" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm">
-            <i class="ph ph-printer text-lg"></i> Imprimir Reporte
-          </button>
+          <div class="flex items-center gap-2">
+            <button id="btnExportarExcel" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm">
+              <i class="ph ph-file-xls text-lg"></i> Exportar Excel
+            </button>
+            <button id="btnPrint" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm">
+              <i class="ph ph-printer text-lg"></i> Imprimir Reporte
+            </button>
+          </div>
         </div>
 
         <!-- Filtros Interactivos (Ocultos al imprimir) -->
@@ -475,7 +482,74 @@
     let chartTipoInstancia = null;
     let datosCargados = false; 
     let todosLosRegistros = []; 
+    let registrosFiltradosActuales = []; // Guarda los datos filtrados para exportación
     
+    // ==========================================
+    // UTILIDADES DE FORMATO DE FECHA, HORA E IMAGEN
+    // ==========================================
+    function formatearFechaEstandar(fechaStr) {
+      if (!fechaStr || fechaStr === '-') return '-';
+      if (fechaStr.includes('T')) fechaStr = fechaStr.split('T')[0];
+      const partes = fechaStr.split(/[-/]/);
+      if (partes.length === 3) {
+        // Si tiene formato YYYY-MM-DD
+        if (partes[0].length === 4) return `${partes[2]}/${partes[1]}/${partes[0]}`;
+        // Si ya es DD/MM/YYYY
+        return `${partes[0].padStart(2, '0')}/${partes[1].padStart(2, '0')}/${partes[2]}`;
+      }
+      return fechaStr;
+    }
+
+    function formatearHora24(horaStr) {
+      if (!horaStr || horaStr === '-') return '-';
+      
+      horaStr = String(horaStr).trim();
+      const lowerHora = horaStr.toLowerCase();
+      
+      const isPM = lowerHora.includes('pm');
+      const isAM = lowerHora.includes('am');
+      
+      // Limpiar letras (am/pm)
+      let timeStr = lowerHora.replace(/[a-z]/ig, '').trim(); 
+      let partes = timeStr.split(':');
+      
+      if (partes.length >= 2) {
+        let h = parseInt(partes[0], 10);
+        const m = partes[1].padStart(2, '0');
+        const s = (partes[2] || '00').replace(/[^0-9]/g, '').padStart(2, '0');
+        
+        if (isNaN(h)) return horaStr;
+
+        if (isPM && h < 12) h += 12;
+        if (isAM && h === 12) h = 0;
+        
+        return `${String(h).padStart(2, '0')}:${m}:${s}`;
+      }
+      return horaStr;
+    }
+
+    function obtenerUrlImagen(reg) {
+      if (!reg) return '';
+      
+      // 1. Intentar claves predecibles
+      if (reg.imagenUrl && String(reg.imagenUrl).startsWith('http')) return reg.imagenUrl;
+      if (reg.evidenciaUrl && String(reg.evidenciaUrl).startsWith('http')) return reg.evidenciaUrl;
+      if (reg.imagen && String(reg.imagen).startsWith('http')) return reg.imagen;
+      if (reg.foto && String(reg.foto).startsWith('http')) return reg.foto;
+
+      // 2. Búsqueda dinámica profunda (por si la cabecera del Excel/Base de Datos tiene otro nombre)
+      for (const key in reg) {
+        const val = reg[key];
+        if (typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://'))) {
+           const kLower = key.toLowerCase();
+           if (kLower.includes('imagen') || kLower.includes('foto') || kLower.includes('evidencia') || kLower.includes('url') || kLower.includes('adjunto') || kLower.includes('link')) {
+               return val;
+           }
+        }
+      }
+      return ''; // Retorna vacío si no se encuentra enlace
+    }
+
     // ==========================================
     // INICIALIZACIÓN
     // ==========================================
@@ -484,10 +558,13 @@
       const day = String(now.getDate()).padStart(2, '0');
       const month = String(now.getMonth() + 1).padStart(2, '0');
       const year = now.getFullYear();
-      const hours = String(now.getHours()).padStart(2, '0');
+      
+      // Formato puro 24 hrs
+      const hours24 = String(now.getHours()).padStart(2, '0');
       const minutes = String(now.getMinutes()).padStart(2, '0');
       const seconds = String(now.getSeconds()).padStart(2, '0');
-      const timestampStr = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+      
+      const timestampStr = `${day}/${month}/${year} ${hours24}:${minutes}:${seconds}`;
       document.getElementById('timestamp').value = timestampStr;
     }
 
@@ -594,6 +671,7 @@
       currentUser = null;
       datosCargados = false; 
       todosLosRegistros = [];
+      registrosFiltradosActuales = [];
       document.getElementById('loginUsuario').value = '';
       document.getElementById('loginPassword').value = '';
       document.getElementById('appContainer').classList.add('hidden');
@@ -738,6 +816,7 @@
         return true; 
       });
 
+      registrosFiltradosActuales = registrosFiltrados; // Guardamos globalmente para poder exportar a excel
       procesarDatosParaGraficos(registrosFiltrados);
     }
 
@@ -864,6 +943,59 @@
     }
 
     // ==========================================
+    // EXPORTAR A EXCEL (USANDO SHEETJS)
+    // ==========================================
+    document.getElementById('btnExportarExcel').addEventListener('click', () => {
+      if (registrosFiltradosActuales.length === 0) {
+        alert("No hay registros para exportar con los filtros actuales.");
+        return;
+      }
+
+      // Preparar los datos en un formato amigable para el Excel incluyendo las fechas correctas y el Link a la imagen
+      const datosExcel = registrosFiltradosActuales.map(reg => {
+        // Encontrar la URL de la imagen independientemente de cómo se llame en la Base de Datos
+        const linkImagen = obtenerUrlImagen(reg) || 'Sin Imagen';
+        
+        return {
+          'Fecha': formatearFechaEstandar(reg.fecha),
+          'Hora': formatearHora24(reg.hora),
+          'Supervisor': reg.supervisor || '-',
+          'Área': reg.area || '-',
+          'Tipo de Residuo': reg.tipo || '-',
+          'Peso (Kg)': reg.peso || 0,
+          'Bolsas Utilizadas': reg.bolsas || 0,
+          'Observaciones': reg.observaciones || '',
+          'Imagen (Link)': linkImagen
+        };
+      });
+
+      // Crear un libro de Excel y su hoja
+      const worksheet = XLSX.utils.json_to_sheet(datosExcel);
+      const workbook = XLSX.utils.book_new();
+
+      // Ajustar el ancho de las columnas
+      const wscols = [
+        {wch: 12}, // Fecha
+        {wch: 10}, // Hora (24h suele requerir menos espacio)
+        {wch: 30}, // Supervisor
+        {wch: 20}, // Área
+        {wch: 20}, // Tipo Residuo
+        {wch: 12}, // Peso
+        {wch: 15}, // Bolsas
+        {wch: 40}, // Observaciones
+        {wch: 50}  // Imagen (Link)
+      ];
+      worksheet['!cols'] = wscols;
+
+      // Adjuntar la hoja al libro
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Residuos");
+
+      // Descargar el archivo
+      const fechaHoy = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(workbook, `Reporte_Residuos_${fechaHoy}.xlsx`);
+    });
+
+    // ==========================================
     // IMPRIMIR REPORTE (NUEVO FORMATO HACCP CORPORATIVO)
     // ==========================================
     document.getElementById('btnPrint').addEventListener('click', () => {
@@ -950,10 +1082,11 @@
       submitBtn.disabled = true;
       submitBtn.innerHTML = '<i class="ph ph-spinner ph-spin text-xl"></i> <span>Guardando...</span>';
       
+      // Extraemos la fecha y hora directamente desde el input visual que ya está en dd/mm/yyyy y 24hrs
       const timestampVal = document.getElementById('timestamp').value.trim();
       const parts = timestampVal.split(' ');
       const fechaVal = parts[0] || '';
-      const horaVal = parts.slice(1).join(' ') || '';
+      const horaVal = parts[1] || '';
       
       const formData = {
         action: 'registrar',
@@ -1009,7 +1142,13 @@
         'bg-gray-200 text-gray-700';
       const supervisorCorto = data.supervisor.split('@')[0];
       const idSimulado = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
-      const fotoIcon = data.imagenBase64 ? '<i class="ph-fill ph-image text-green-500" title="Foto adjunta"></i>' : '';
+      
+      const urlImagen = obtenerUrlImagen(data);
+      const fotoIcon = urlImagen || data.imagenBase64 ? '<i class="ph-fill ph-image text-green-500" title="Foto adjunta"></i>' : '';
+      
+      const fechaMostrar = formatearFechaEstandar(data.fecha);
+      const horaMostrar = formatearHora24(data.hora);
+
       const html = `
                 <div class="p-4 rounded-lg border border-gray-100 bg-gray-50 hover:bg-gray-100 transition-colors fade-in">
                     <div class="flex justify-between items-start mb-2">
@@ -1023,7 +1162,7 @@
                     </div>
                     <div class="mt-2 text-xs text-gray-500 flex justify-between items-center border-t border-gray-200 pt-2">
                         <span class="truncate max-w-[120px]" title="${data.supervisor}">${supervisorCorto}</span>
-                        <span>${data.fecha} ${data.hora}</span>
+                        <span>${fechaMostrar} ${horaMostrar}</span>
                     </div>
                 </div>
             `;
