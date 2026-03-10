@@ -1,4 +1,7 @@
- .fade-in {
+/* ========================================== */
+    /* ESTILOS GLOBALES Y ANIMACIONES             */
+    /* ========================================== */
+    .fade-in {
       animation: fadeIn 0.4s ease-in-out;
     }
     @keyframes fadeIn {
@@ -6,7 +9,26 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* ESTILOS DE IMPRESIÓN BASADOS EN LA PLANTILLA CORPORATIVA HACCP */
+    /* CUSTOM SCROLLBAR (Mejora UX para la nueva tabla y modal) */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f8fafc; 
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1; 
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8; 
+    }
+
+    /* ========================================== */
+    /* ESTILOS DE IMPRESIÓN (PLANTILLA HACCP)     */
+    /* ========================================== */
     @media print {
       body {
         background-color: white !important;
