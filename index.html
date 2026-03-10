@@ -6,14 +6,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Registro de Residuos</title>
   
-  <!-- Dependencias Externas -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
-
+<script src="script.js"></script>
 </head>
 
 <body class="bg-gray-50 text-gray-800 font-sans min-h-screen relative">
@@ -57,12 +56,8 @@
     </div>
   </div>
 
-  <!-- ========================================== -->
-  <!-- APLICACIÓN PRINCIPAL -->
-  <!-- ========================================== -->
   <div id="appContainer" class="hidden p-4 md:p-8 max-w-6xl mx-auto space-y-6 fade-in">
 
-    <!-- Encabezado Principal y Navegación (Se oculta al imprimir) -->
     <header id="mainHeader" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-4 print:hidden">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
@@ -88,10 +83,12 @@
         </div>
       </div>
 
-      <!-- Pestañas de Navegación -->
       <nav class="flex gap-6 mt-2 border-b border-gray-200">
         <button id="tabRegistro" class="pb-2 text-green-600 border-b-2 border-green-600 font-medium transition-colors flex items-center gap-2">
           <i class="ph ph-note-pencil text-lg"></i> Registro
+        </button>
+        <button id="tabRevision" class="pb-2 text-gray-500 hover:text-green-600 font-medium transition-colors flex items-center gap-2">
+          <i class="ph ph-table text-lg"></i> Mis Registros
         </button>
         <button id="tabDashboard" class="pb-2 text-gray-500 hover:text-green-600 font-medium transition-colors flex items-center gap-2">
           <i class="ph ph-chart-bar text-lg"></i> Dashboard
@@ -99,9 +96,6 @@
       </nav>
     </header>
 
-    <!-- ========================================== -->
-    <!-- VISTA 1: FORMULARIO DE REGISTRO -->
-    <!-- ========================================== -->
     <div id="vistaRegistro" class="grid grid-cols-1 lg:grid-cols-3 gap-6 fade-in print:hidden">
       <div class="lg:col-span-2">
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -221,21 +215,14 @@
       </div>
     </div>
 
-    <!-- ========================================== -->
-    <!-- VISTA 2: DASHBOARD Y REPORTE CORPORATIVO -->
-    <!-- ========================================== -->
     <div id="vistaDashboard" class="hidden space-y-6 fade-in">
-      
-      <!-- Estado de Carga -->
       <div id="dashboardLoading" class="flex flex-col items-center justify-center py-20 bg-white rounded-xl shadow-sm border border-gray-100 print:hidden">
         <i class="ph ph-spinner-gap ph-spin text-4xl text-green-600 mb-4"></i>
         <p class="text-gray-500 font-medium">Obteniendo datos de la base de datos...</p>
       </div>
 
-      <!-- Contenido del Dashboard -->
       <div id="dashboardContent" class="hidden space-y-4 print:space-y-0">
         
-        <!-- CABECERA EXCLUSIVA PARA IMPRESIÓN (DISEÑO HACCP - LA GENOVESA) -->
         <div class="haccp-print-container mb-6 print:mb-2 w-full hidden print:block">
           <div class="header-flex-container">
             <svg class="logo" viewBox="60 20 280 160" xmlns="http://www.w3.org/2000/svg">
@@ -248,14 +235,9 @@
               <text x="200" y="145" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#FFF" letter-spacing="3">DESDE 1977</text>
             </svg>
             <div class="header-text-wrapper">
-              <div class="header-title">
-                  PLAN HACCP<br>
-                  REPORTE DE GESTIÓN DE RESIDUOS
-              </div>
+              <div class="header-title">PLAN HACCP<br>REPORTE DE GESTIÓN DE RESIDUOS</div>
               <div class="template-details">
-                  <div>Código: LGA-SGA-RES-01</div>
-                  <div >Fecha: 08-2025</div>
-                  <div>Versión: 1</div>
+                  <div>Código: LGA-SGA-RES-01</div><div>Fecha: 08-2025</div><div>Versión: 1</div>
               </div>
               <div class="template-details">
                   <div>Elaborado por: Área de Aseguramiento de Calidad</div>
@@ -264,25 +246,13 @@
               </div>
             </div>
           </div>
-
-          <!-- SECCIÓN DE INFORMACIÓN Y FILTROS -->
           <div class="section-info">
-            <div>
-              <span style="color: #0056B3;font-size: 1em; font-weight: bold;">Fecha Inicio: </span><span id="printFInicio"></span><br>
-              <span style="color: #0056B3;font-size: 1em; font-weight: bold;">Fecha Fin: </span><span id="printFFin"></span>
-            </div>
-            <div>
-              <span style="color: #0056B3;font-size: 1em; font-weight: bold;">Área: </span><span id="printFArea"></span><br>
-              <span style="color: #0056B3;font-size: 1em; font-weight: bold;">Tipo Residuo: </span><span id="printFTipo"></span>
-            </div>
-            <div>
-              <span style="color: #0056B3;font-size: 1em; font-weight: bold;">Generado por: </span><span id="printGeneradoPor"></span>
-            </div>
+            <div><span style="color: #0056B3;font-size: 1em; font-weight: bold;">Fecha Inicio: </span><span id="printFInicio"></span><br><span style="color: #0056B3;font-size: 1em; font-weight: bold;">Fecha Fin: </span><span id="printFFin"></span></div>
+            <div><span style="color: #0056B3;font-size: 1em; font-weight: bold;">Área: </span><span id="printFArea"></span><br><span style="color: #0056B3;font-size: 1em; font-weight: bold;">Tipo Residuo: </span><span id="printFTipo"></span></div>
+            <div><span style="color: #0056B3;font-size: 1em; font-weight: bold;">Generado por: </span><span id="printGeneradoPor"></span></div>
           </div>
         </div>
-        <!-- FIN CABECERA IMPRESIÓN -->
 
-        <!-- Barra Superior del Dashboard (Pantalla) -->
         <div class="flex justify-between items-center print:hidden">
           <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2"><i class="ph ph-chart-line-up text-green-600"></i> Análisis General</h2>
           <div class="flex items-center gap-2">
@@ -295,7 +265,6 @@
           </div>
         </div>
 
-        <!-- Filtros Interactivos (Ocultos al imprimir) -->
         <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 grid grid-cols-1 md:grid-cols-4 gap-4 items-end print:hidden">
           <div>
             <label class="block text-xs font-medium text-gray-600 mb-1 flex items-center gap-1"><i class="ph ph-calendar"></i> Fecha Inicio</label>
@@ -334,32 +303,23 @@
           </div>
         </div>
 
-        <!-- Tarjetas de KPIs -->
         <div id="printKpiGrid" class="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
-            <div class="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center text-green-600">
-              <i class="ph-fill ph-scales text-3xl print:text-xl"></i>
-            </div>
+            <div class="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center text-green-600"><i class="ph-fill ph-scales text-3xl print:text-xl"></i></div>
             <div>
               <p class="text-sm text-gray-500 font-medium print:text-gray-700">Total Residuos (Kg)</p>
               <h3 id="kpiPeso" class="text-2xl font-bold text-gray-900">0.0</h3>
             </div>
           </div>
-          
           <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
-            <div class="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-              <i class="ph-fill ph-shopping-bag text-3xl print:text-xl"></i>
-            </div>
+            <div class="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center text-blue-600"><i class="ph-fill ph-shopping-bag text-3xl print:text-xl"></i></div>
             <div>
               <p class="text-sm text-gray-500 font-medium print:text-gray-700">Bolsas Utilizadas</p>
               <h3 id="kpiBolsas" class="text-2xl font-bold text-gray-900">0</h3>
             </div>
           </div>
-
           <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
-            <div class="w-14 h-14 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
-              <i class="ph-fill ph-files text-3xl print:text-xl"></i>
-            </div>
+            <div class="w-14 h-14 rounded-full bg-purple-100 flex items-center justify-center text-purple-600"><i class="ph-fill ph-files text-3xl print:text-xl"></i></div>
             <div>
               <p class="text-sm text-gray-500 font-medium print:text-gray-700">Registros Filtrados</p>
               <h3 id="kpiRegistros" class="text-2xl font-bold text-gray-900">0</h3>
@@ -367,24 +327,17 @@
           </div>
         </div>
 
-        <!-- Gráficos -->
         <div id="printChartGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-8 print:pb-2">
           <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 print:break-inside-avoid print:p-2">
             <h3 class="text-lg font-semibold text-gray-800 mb-4 border-b border-gray-100 pb-2 print:mb-2 print:text-base">Residuos por Área (Kg)</h3>
-            <div class="relative h-[300px] mt-4">
-              <canvas id="chartArea"></canvas>
-            </div>
+            <div class="relative h-[300px] mt-4"><canvas id="chartArea"></canvas></div>
           </div>
-          
           <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 print:break-inside-avoid print:p-2">
             <h3 class="text-lg font-semibold text-gray-800 mb-4 border-b border-gray-100 pb-2 print:mb-2 print:text-base">Distribución por Tipo</h3>
-            <div class="relative h-[300px] flex justify-center mt-4">
-              <canvas id="chartTipo"></canvas>
-            </div>
+            <div class="relative h-[300px] flex justify-center mt-4"><canvas id="chartTipo"></canvas></div>
           </div>
         </div>
 
-        <!-- PIE DE REPORTE (NOTAS Y FIRMA - EXCLUSIVO IMPRESIÓN) -->
         <div class="haccp-print-container w-full hidden print:block mt-6">
           <div class="bottom-sections-wrapper">
               <div class="notes-section">
@@ -397,24 +350,127 @@
               </div>
               <div class="signature-section">
                   <div class="signature-box">
-                      <div class="signature-area">
-                          <!-- Espacio reservado para la firma física del usuario -->
-                      </div>
+                      <div class="signature-area"></div>
                       <div class="label" id="printFirmaNombre">Supervisor</div>
                   </div>
               </div>
           </div>
         </div>
-        <!-- FIN PIE DE REPORTE -->
-
       </div>
     </div>
 
+    <div id="vistaRevision" class="hidden space-y-6 fade-in print:hidden">
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-gray-100 pb-4">
+          <div>
+            <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+              <i class="ph ph-folder-user text-green-600"></i> Mis Registros
+            </h2>
+            <p class="text-sm text-gray-500 mt-1">
+              Visualiza y edita los registros creados por ti, basados en las fechas filtradas en el Dashboard.
+            </p>
+          </div>
+          <div class="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+             <i class="ph ph-info text-green-600"></i> Edición limitada a tu autoría
+          </div>
+        </div>
+        
+        <div class="overflow-x-auto rounded-lg border border-gray-200">
+          <table class="w-full text-sm text-left text-gray-600">
+            <thead class="text-xs text-gray-700 uppercase bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th scope="col" class="px-4 py-3">Fecha y Hora</th>
+                <th scope="col" class="px-4 py-3">Área de Origen</th>
+                <th scope="col" class="px-4 py-3">Tipo</th>
+                <th scope="col" class="px-4 py-3 text-center">Peso (Kg)</th>
+                <th scope="col" class="px-4 py-3 text-center">Bolsas</th>
+                <th scope="col" class="px-4 py-3 text-center">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="tablaMisRegistros" class="divide-y divide-gray-100">
+              </tbody>
+          </table>
+        </div>
+
+        <div id="emptyRevisionState" class="hidden p-12 text-center flex flex-col items-center justify-center">
+          <div class="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+            <i class="ph ph-folder-open text-3xl text-gray-400"></i>
+          </div>
+          <p class="text-gray-600 font-medium">No hay registros tuyos en este rango de fechas</p>
+          <p class="text-gray-400 text-sm mt-1">Dirígete a la pestaña Dashboard para cambiar el filtro de fechas.</p>
+        </div>
+      </div>
+    </div>
+
+  </div> <div id="modalEdicion" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900 bg-opacity-50 backdrop-blur-sm print:hidden">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+      <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+        <h3 class="font-bold text-gray-800 flex items-center gap-2">
+          <i class="ph ph-pencil-simple text-green-600"></i> Editar Registro
+        </h3>
+        <button onclick="cerrarModalEdicion()" class="text-gray-400 hover:text-red-500 transition-colors">
+          <i class="ph ph-x text-xl"></i>
+        </button>
+      </div>
+      
+      <div class="p-6 overflow-y-auto">
+        <form id="formEdicionRegistro" class="space-y-4">
+          <input type="hidden" id="editId">
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Área de Origen</label>
+            <select id="editArea" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all">
+              <option value="Almacen PT">Almacen PT</option>
+              <option value="Almacen MP">Almacen MP</option>
+              <option value="Almacen Insumos">Almacen Insumos</option>
+              <option value="Desposte">Desposte</option>
+              <option value="Empaque">Empaque</option>
+              <option value="Madurado">Madurado</option>
+              <option value="Produccion">Produccion</option>
+              <option value="Residuos por Control de Calidad">Control de Calidad</option>
+              <option value="Saneamiento">Saneamiento</option>
+              <option value="Skin">Skin</option>
+              <option value="Otra">Otra...</option>
+            </select>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de Residuo</label>
+            <select id="editTipo" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all">
+              <option value="Organico">Organico</option>
+              <option value="Plastico">Plastico</option>
+              <option value="Carton/Papel">Carton/Papel</option>
+              <option value="Generales/Basura">Generales/Basura</option>
+            </select>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Peso (Kg)</label>
+              <input type="number" id="editPeso" step="0.01" min="0" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Nº Bolsas</label>
+              <input type="number" id="editBolsas" step="1" min="0" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Observaciones</label>
+            <textarea id="editObservaciones" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all resize-none"></textarea>
+          </div>
+          
+          <div class="pt-4 flex gap-3">
+            <button type="button" onclick="cerrarModalEdicion()" class="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium">Cancelar</button>
+            <button type="submit" id="btnGuardarEdicion" class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex justify-center items-center gap-2">
+              <i class="ph ph-check-circle"></i> Guardar Cambios
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 
-  <!-- ========================================== -->
-  <!-- MODAL CAMBIO DE CREDENCIALES -->
-  <!-- ========================================== -->
   <div id="modalCredenciales" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-lg w-full max-w-sm overflow-hidden">
       <div class="bg-gray-50 border-b border-gray-100 px-6 py-4 flex items-center gap-2">
@@ -428,7 +484,7 @@
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Nueva Contraseña</label>
-          <input type="text" id="nuevaPassword" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all">
+          <input type="password" id="nuevaPassword" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all">
         </div>
         
         <div id="credErrorMsg" class="hidden text-red-600 text-sm bg-red-50 p-2 rounded border border-red-100"></div>
@@ -444,9 +500,6 @@
     </div>
   </div>
 
-  <!-- ========================================== -->
-  <!-- MODAL COMPLETAR PERFIL FALTANTE -->
-  <!-- ========================================== -->
   <div id="modalCompletarPerfil" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-lg w-full max-w-sm overflow-hidden">
       <div class="bg-blue-50 border-b border-blue-100 px-6 py-4 flex items-center gap-2">
@@ -476,7 +529,6 @@
       </form>
     </div>
   </div>
-
-<script src="script.js"></script>  
 </body>
+
 </html>
