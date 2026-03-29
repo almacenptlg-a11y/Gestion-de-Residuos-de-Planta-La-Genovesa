@@ -1,1 +1,1 @@
-# Gestion-de-Residuos-de-Planta-La-Genovesa
+# Gestión de Residuos de planta

@@ -1,17 +1,351 @@
 // ==========================================
 // CONFIGURACIÓN DE GOOGLE APPS SCRIPT
 // ==========================================
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxtRPvgzwS23dx5_NQLlsrIOgDjlP3-wX4B6li8wjJjjnmnnXi22b703PK8zFT4iplAKQ/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzYcfPzxhhlU4WOC0g8UvOUTQtypRNTvPYGGGpcMPPw9PuJPxsKirGPrg2G1csBDVdH/exec';
 
 // ==========================================
-// VARIABLES GLOBALES
+// 0. RECUPERACIÓN INMEDIATA DEL TEMA (Anti-FOUC)
 // ==========================================
-let currentUser = null;
+// Ejecutamos esto inmediatamente para evitar el parpadeo blanco al recargar
+const savedTheme = sessionStorage.getItem('moduloResiduosTheme');
+if (savedTheme === 'dark') {
+    document.documentElement.classList.add('dark');
+}
+// ==========================================
+// CONFIGURACIÓN DE PROCESAMIENTO DE IMÁGENES (HACCP OPTIMIZED)
+// ==========================================
+const MAX_IMAGE_WIDTH = 1024; // Ancho máximo en px (Suficiente para ver detalles)
+const IMAGE_QUALITY = 0.7;    // Calidad de compresión JPEG (0.0 a 1.0)
+
+// ==========================================
+// 1. ESTADO CENTRALIZADO Y COMUNICACIÓN HUB
+// ==========================================
+const AppState = {
+  user: null,
+  isSessionVerified: false
+};
+
 let chartAreaInstancia = null;
 let chartTipoInstancia = null;
 let datosCargados = false; 
+let isFetchingDashboard = false;
 let todosLosRegistros = []; 
 let registrosFiltradosActuales = []; 
+
+// ESCUCHADOR DE MENSAJES (WINDOW.PARENT)
+window.addEventListener('message', (event) => {
+  const { type, user, theme } = event.data || {};
+  
+  if (type === 'THEME_UPDATE') {
+      document.documentElement.classList.toggle('dark', theme === 'dark');
+      sessionStorage.setItem('moduloResiduosTheme', theme); // Persistimos el tema
+  }
+
+  if (type === 'SESSION_SYNC' && user) {
+      document.documentElement.classList.toggle('dark', theme === 'dark');
+      if (theme) sessionStorage.setItem('moduloResiduosTheme', theme); // Persistimos el tema
+      
+      AppState.user = user;
+      AppState.isSessionVerified = true;
+      sessionStorage.setItem('moduloResiduosUser', JSON.stringify(user));
+      
+      mostrarAplicacion();
+  }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  actualizarTimestamp();
+  inicializarFiltrosFechas();
+
+  const savedUser = sessionStorage.getItem('moduloResiduosUser');
+  if (savedUser) {
+      AppState.user = JSON.parse(savedUser);
+      AppState.isSessionVerified = true;
+      mostrarAplicacion();
+  }
+
+  // Avisar al Hub que estamos listos para recibir credenciales
+  window.parent.postMessage({ type: 'MODULO_LISTO' }, '*');
+
+  setTimeout(() => {
+      if (!AppState.isSessionVerified) {
+          const statusTxt = document.getElementById('txt-usuario-activo');
+          if (statusTxt) statusTxt.innerHTML = '<i class="ph ph-warning text-red-500"></i> Esperando autorización del Hub...';
+      }
+  }, 4000);
+  
+  SyncManager.updateBadge();
+});
+
+function mostrarAplicacion() {
+  const appContainer = document.getElementById('appContainer');
+  if (appContainer) appContainer.classList.remove('hidden');
+  
+  if (AppState.user) {
+      const nombreMostrar = AppState.user.nombre || AppState.user.usuario || 'Usuario';
+      const rolMostrar = AppState.user.rol || AppState.user.area || 'Supervisor';
+      
+      const txtUsuario = document.getElementById('txt-usuario-activo');
+      if (txtUsuario) {
+          txtUsuario.innerHTML = `<i class="ph ph-user-check"></i> ${nombreMostrar} | ${rolMostrar}`;
+      }
+      
+      // FIX: Uso de Optional Chaining para evitar el TypeError
+      const displayRole = document.getElementById('displayUserRole');
+      if (displayRole) displayRole.textContent = rolMostrar; 
+  }
+
+  // REGLA: Ocultar Dashboard a roles operativos puros
+  const rolesPrivilegiados = ['JEFE', 'GERENTE', 'ADMINISTRADOR', 'CALIDAD'];
+  const rolUser = (AppState.user?.rol || '').toUpperCase();
+  const tabDash = document.getElementById('tabDashboard');
+  
+  if (tabDash) {
+      if (rolesPrivilegiados.includes(rolUser)) {
+          tabDash.classList.remove('hidden');
+      } else {
+          tabDash.classList.add('hidden'); 
+      }
+  }
+
+  // PRE-CARGA EN SEGUNDO PLANO
+  if (!datosCargados && !isFetchingDashboard) {
+      setTimeout(() => {
+          cargarDatosDashboard();
+      }, 300); 
+  }
+}
+
+// ==========================================
+// MOTOR DUAL OFFLINE-FIRST (INDEXEDDB) & REFRESH MANAGER
+// ==========================================
+const IDB_NAME = 'GenApps_DB_Residuos';
+const STORE_NAME = 'sync_queue';
+const IDB_VERSION = 1;
+
+// Wrapper asíncrono en O(1) para IndexedDB (Cero dependencias)
+const dbPromise = new Promise((resolve, reject) => {
+    const request = indexedDB.open(IDB_NAME, IDB_VERSION);
+    request.onerror = () => reject('Error al abrir IndexedDB');
+    request.onsuccess = (e) => resolve(e.target.result);
+    request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME, { keyPath: '_localId' });
+        }
+    };
+});
+
+const dbUtil = {
+    async getAll() {
+        const db = await dbPromise;
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const req = tx.objectStore(STORE_NAME).getAll();
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+    async put(item) {
+        const db = await dbPromise;
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const req = tx.objectStore(STORE_NAME).put(item);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+    async delete(key) {
+        const db = await dbPromise;
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const req = tx.objectStore(STORE_NAME).delete(key);
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
+        });
+    }
+};
+
+const SyncManager = {
+    isSyncing: false,
+    
+    // Ahora devuelve una Promesa
+    async getQueue() {
+        try {
+            return await dbUtil.getAll();
+        } catch (e) {
+            console.error("Error leyendo IndexedDB:", e);
+            return [];
+        }
+    },
+    
+    // Inserción asíncrona sin bloquear el DOM
+    async enqueue(record) {
+        record._localId = Date.now().toString(); 
+        await dbUtil.put(record);
+        await this.updateBadge();
+    },
+    
+    async remove(localId) {
+        await dbUtil.delete(localId);
+    },
+    
+    async sync(forcePull = false) {
+        if (!navigator.onLine || this.isSyncing) return;
+        
+        const queue = await this.getQueue();
+        
+        if (queue.length === 0 && !forcePull) {
+            this.updateBadge();
+            return;
+        }
+
+        this.isSyncing = true; 
+        
+        // UI: Configurar estado de carga
+        const badge = document.getElementById('syncStatusBadge');
+        const badgeText = document.getElementById('syncStatusText');
+        const badgeIcon = document.getElementById('syncStatusIcon');
+        const btnForce = document.getElementById('btnForceSync');
+        const iconForce = document.getElementById('iconForceSync');
+        
+        if (badge) badge.classList.remove('hidden');
+        if (badgeIcon) badgeIcon.className = 'ph-fill ph-arrows-clockwise text-blue-400 animate-spin inline-block text-xl';
+        
+        if (btnForce) {
+            btnForce.disabled = true;
+            iconForce.classList.add('animate-spin');
+        }
+
+        let hasErrors = false;
+
+        // FASE 1: PUSH (Subir a GAS)
+        if (queue.length > 0) {
+            if (badgeText) badgeText.textContent = `Subiendo ${queue.length} registro(s)...`;
+            for (const record of queue) {
+                try {
+                    const payload = { ...record };
+                    delete payload._localId; 
+                    
+                    const response = await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    const res = await response.json();
+                    if (res.status === 'success') {
+                        await this.remove(record._localId); // Borrado en DB
+                        const localTag = document.getElementById(`sync-tag-${record._localId}`);
+                        if (localTag) localTag.innerHTML = '<i class="ph-fill ph-cloud-check text-green-500" title="Sincronizado"></i>';
+                    } else {
+                        hasErrors = true;
+                    }
+                } catch (e) {
+                    hasErrors = true;
+                    break; 
+                }
+            }
+        }
+
+        // FASE 2: PULL (Refrescar Dashboard)
+        if (!hasErrors && (forcePull || queue.length > 0)) {
+            if (badgeText) badgeText.textContent = 'Actualizando panel...';
+            try {
+                datosCargados = false; 
+                isFetchingDashboard = false; 
+                await cargarDatosDashboard(forcePull); 
+            } catch (e) {
+                hasErrors = true;
+            }
+        }
+
+        // Restaurar UI
+        if (badgeIcon) badgeIcon.classList.remove('animate-spin');
+        if (iconForce) iconForce.classList.remove('animate-spin');
+        if (btnForce) btnForce.disabled = false;
+        
+        const remainingQueue = await this.getQueue();
+        
+        if (!hasErrors && remainingQueue.length === 0) {
+            if (badgeIcon) badgeIcon.className = 'ph-fill ph-check-circle text-green-400 text-xl';
+            if (badgeText) badgeText.textContent = '¡Datos actualizados!';
+            setTimeout(() => { if(badge) badge.classList.add('hidden'); }, 3500);
+        } else {
+            if (badgeIcon) badgeIcon.className = 'ph-fill ph-warning-circle text-yellow-400 text-xl';
+            if (badgeText) badgeText.textContent = 'Red inestable. Reintentaremos luego.';
+            setTimeout(() => this.updateBadge(), 4000);
+        }
+        
+        this.isSyncing = false;
+        this.updateBadge(); 
+    },
+    
+    async updateBadge() {
+        const queue = await this.getQueue();
+        const badge = document.getElementById('syncStatusBadge');
+        const badgeText = document.getElementById('syncStatusText');
+        const badgeIcon = document.getElementById('syncStatusIcon');
+        
+        const btnForce = document.getElementById('btnForceSync');
+        const countForce = document.getElementById('countForceSync');
+        const txtForce = document.getElementById('txtForceSync');
+        
+        if (!badge || !badgeIcon) return; // Defensive programming
+
+        if (queue.length > 0) {
+            if (!this.isSyncing) {
+                badge.classList.remove('hidden');
+                badgeIcon.className = 'ph-fill ph-cloud-slash text-yellow-400 text-xl';
+                if (badgeText) badgeText.textContent = `${queue.length} registro(s) pendiente(s)`;
+            }
+            
+            if (btnForce) {
+                btnForce.className = 'flex bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-700/50 px-3 py-1.5 rounded-lg items-center gap-2 text-sm font-medium transition-all shadow-sm hover:bg-amber-100 dark:hover:bg-amber-900/50';
+                if (txtForce) txtForce.textContent = "Sincronizar";
+                if (countForce) {
+                    countForce.classList.remove('hidden');
+                    countForce.textContent = queue.length;
+                }
+            }
+        } else {
+            if (!badgeIcon.classList.contains('animate-spin') && badgeText && !badgeText.textContent.includes('actualizados')) {
+                 badge.classList.add('hidden');
+            }
+            if (btnForce && !this.isSyncing) {
+                btnForce.className = 'flex bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-lg items-center gap-2 text-sm font-medium transition-all shadow-sm hover:bg-gray-100 dark:hover:bg-gray-700/80';
+                if (txtForce) txtForce.textContent = "Actualizar";
+                if (countForce) countForce.classList.add('hidden');
+            }
+        }
+    }
+};
+
+
+// ==========================================
+// TRIGGERS DE SINCRONIZACIÓN (BLINDAJE TRIPLE)
+// ==========================================
+window.addEventListener('online', () => SyncManager.sync(false));
+window.addEventListener('offline', () => SyncManager.updateBadge());
+
+document.addEventListener('DOMContentLoaded', () => {
+    const btnForce = document.getElementById('btnForceSync');
+    if(btnForce) {
+        btnForce.addEventListener('click', () => SyncManager.sync(true));
+    }
+    // Inicializar el badge en la carga de la página
+    SyncManager.updateBadge();
+});
+
+// Polling asíncrono
+setInterval(async () => {
+    if (navigator.onLine && !SyncManager.isSyncing) {
+        const queue = await SyncManager.getQueue();
+        if (queue.length > 0) {
+            SyncManager.sync(false);
+        }
+    }
+}, 20000);
 
 // ==========================================
 // UTILIDADES DE EXTRACCIÓN Y FORMATO 
@@ -86,21 +420,26 @@ function obtenerObservaciones(reg) {
   return '';
 }
 
-// ==========================================
-// INICIALIZACIÓN
-// ==========================================
 function actualizarTimestamp() {
   const now = new Date();
+  
+  // Formato ISO para el input type="date" (YYYY-MM-DD)
   const day = String(now.getDate()).padStart(2, '0');
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const year = now.getFullYear();
+  const dateStr = `${year}-${month}-${day}`;
   
-  const hours24 = String(now.getHours()).padStart(2, '0');
+  // Formato para el input type="time" (HH:MM:SS)
+  const hours = String(now.getHours()).padStart(2, '0');
   const minutes = String(now.getMinutes()).padStart(2, '0');
   const seconds = String(now.getSeconds()).padStart(2, '0');
+  const timeStr = `${hours}:${minutes}:${seconds}`;
   
-  const timestampStr = `${day}/${month}/${year} ${hours24}:${minutes}:${seconds}`;
-  document.getElementById('timestamp').value = timestampStr;
+  const inputFecha = document.getElementById('fechaRegistro');
+  const inputHora = document.getElementById('horaRegistro');
+  
+  if (inputFecha) inputFecha.value = dateStr;
+  if (inputHora) inputHora.value = timeStr;
 }
 
 function inicializarFiltrosFechas() {
@@ -110,26 +449,14 @@ function inicializarFiltrosFechas() {
   document.getElementById('filtroFechaInicio').value = localISOTime;
   document.getElementById('filtroFechaFin').value = localISOTime;
 
-  // REGLA ARQUITECTÓNICA: Prevenir el evento 'change' prematuro
   document.getElementById('filtroFechaInicio').addEventListener('blur', cargarDatosDashboard);
   document.getElementById('filtroFechaFin').addEventListener('blur', cargarDatosDashboard);
-  
   document.getElementById('filtroFechaInicio').addEventListener('keydown', cargarDatosDashboard);
   document.getElementById('filtroFechaFin').addEventListener('keydown', cargarDatosDashboard);
-  
   document.getElementById('filtroArea').addEventListener('change', aplicarFiltros);
   document.getElementById('filtroTipo').addEventListener('change', aplicarFiltros);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  const savedUser = localStorage.getItem('appResiduosUser');
-  if (savedUser) {
-    currentUser = JSON.parse(savedUser);
-    mostrarAplicacion();
-  }
-  actualizarTimestamp();
-  inicializarFiltrosFechas();
-});
 
 // ==========================================
 // NAVEGACIÓN (TABS)
@@ -141,16 +468,14 @@ const tabs = {
 };
 
 function cambiarVista(vistaActiva) {
-  // Ocultar todas
   Object.values(tabs).forEach(tab => {
-    tab.btn.classList.remove('text-green-600', 'border-b-2', 'border-green-600');
-    tab.btn.classList.add('text-gray-500');
+    tab.btn.classList.remove('text-green-600', 'dark:text-green-400', 'border-b-2', 'border-green-600', 'dark:border-green-400');
+    tab.btn.classList.add('text-gray-500', 'dark:text-gray-400');
     tab.vista.classList.add('hidden');
   });
 
-  // Mostrar la solicitada
-  tabs[vistaActiva].btn.classList.add('text-green-600', 'border-b-2', 'border-green-600');
-  tabs[vistaActiva].btn.classList.remove('text-gray-500');
+  tabs[vistaActiva].btn.classList.add('text-green-600', 'dark:text-green-400', 'border-b-2', 'border-green-600', 'dark:border-green-400');
+  tabs[vistaActiva].btn.classList.remove('text-gray-500', 'dark:text-gray-400');
   tabs[vistaActiva].vista.classList.remove('hidden');
 }
 
@@ -161,204 +486,39 @@ tabs.revision.btn.addEventListener('click', async () => {
   if (!datosCargados) {
     await cargarDatosDashboard();
   } else {
+    // Si ya cargaron de fondo, simplemente inyectamos a la tabla
     renderizarMisRegistros();
   }
 });
 
 tabs.dashboard.btn.addEventListener('click', () => {
   cambiarVista('dashboard');
-  if (!datosCargados) cargarDatosDashboard();
-});
-
-
-// ==========================================
-// MANEJO DEL LOGIN Y PERFIL
-// ==========================================
-const loginForm = document.getElementById('loginForm');
-const loginSubmitBtn = document.getElementById('loginSubmitBtn');
-const loginErrorMsg = document.getElementById('loginErrorMsg');
-const loginErrorText = document.getElementById('loginErrorText');
-
-loginForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  loginErrorMsg.classList.add('hidden');
-  
-  const userVal = document.getElementById('loginUsuario').value.trim();
-  const passVal = document.getElementById('loginPassword').value.trim();
-  const btnHtml = loginSubmitBtn.innerHTML;
-  
-  loginSubmitBtn.disabled = true;
-  loginSubmitBtn.innerHTML = '<i class="ph ph-spinner ph-spin text-xl"></i> <span>Verificando...</span>';
-  
-  try {
-    const response = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'login', usuario: userVal, password: passVal })
-    });
-
-    const result = await response.json();
-
-    if (result.status === 'success') {
-      currentUser = result.user; 
-      localStorage.setItem('appResiduosUser', JSON.stringify(currentUser));
-      mostrarAplicacion();
-    } else if (result.status === 'incomplete_profile') {
-      currentUser = result.user; 
-      document.getElementById('perfilNombre').value = currentUser.nombre || '';
-      document.getElementById('perfilEmail').value = currentUser.email || '';
-      document.getElementById('modalCompletarPerfil').classList.remove('hidden');
-    } else {
-      throw new Error(result.message || "Credenciales incorrectas");
-    }
-
-  } catch (error) {
-    loginErrorText.textContent = error.message || "Error al conectar. Intenta nuevamente.";
-    loginErrorMsg.classList.remove('hidden');
-  } finally {
-    loginSubmitBtn.disabled = false;
-    loginSubmitBtn.innerHTML = btnHtml;
-  }
-});
-
-document.getElementById('logoutBtn').addEventListener('click', () => {
-  localStorage.removeItem('appResiduosUser');
-  currentUser = null;
-  datosCargados = false; 
-  todosLosRegistros = [];
-  registrosFiltradosActuales = [];
-  document.getElementById('loginUsuario').value = '';
-  document.getElementById('loginPassword').value = '';
-  document.getElementById('appContainer').classList.add('hidden');
-  document.getElementById('loginContainer').classList.remove('hidden');
-  tabs.registro.btn.click(); 
-});
-
-function mostrarAplicacion() {
-  document.getElementById('loginContainer').classList.add('hidden');
-  document.getElementById('appContainer').classList.remove('hidden');
-  document.getElementById('displayUserName').textContent = currentUser.nombre;
-  document.getElementById('displayUserRole').textContent = currentUser.rol || "Supervisor";
-}
-
-// COMPLETAR PERFIL FALTANTE
-const formCompletarPerfil = document.getElementById('formCompletarPerfil');
-const btnGuardarPerfil = document.getElementById('btnGuardarPerfil');
-const perfilErrorMsg = document.getElementById('perfilErrorMsg');
-
-formCompletarPerfil.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  perfilErrorMsg.classList.add('hidden');
-
-  const nombreVal = document.getElementById('perfilNombre').value.trim();
-  const emailVal = document.getElementById('perfilEmail').value.trim();
-
-  const btnHtml = btnGuardarPerfil.innerHTML;
-  btnGuardarPerfil.disabled = true;
-  btnGuardarPerfil.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Guardando...';
-
-  try {
-    const response = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        action: 'completarPerfil',
-        usuario: currentUser.usuarioLogin, 
-        nombre: nombreVal,
-        email: emailVal
-      })
-    });
-
-    const result = await response.json();
-
-    if (result.status === 'success') {
-      currentUser.nombre = nombreVal;
-      currentUser.email = emailVal;
-      localStorage.setItem('appResiduosUser', JSON.stringify(currentUser));
-      document.getElementById('modalCompletarPerfil').classList.add('hidden');
-      mostrarAplicacion();
-    } else {
-      throw new Error(result.message || "No se pudo actualizar el perfil.");
-    }
-  } catch (error) {
-    perfilErrorMsg.textContent = error.message || "Error de conexión. Intenta nuevamente.";
-    perfilErrorMsg.classList.remove('hidden');
-  } finally {
-    btnGuardarPerfil.disabled = false;
-    btnGuardarPerfil.innerHTML = btnHtml;
-  }
-});
-
-// ACTUALIZAR CREDENCIALES
-const btnAbrirCredenciales = document.getElementById('btnAbrirCredenciales');
-const modalCredenciales = document.getElementById('modalCredenciales');
-const formCredenciales = document.getElementById('formCredenciales');
-const btnGuardarCredenciales = document.getElementById('btnGuardarCredenciales');
-
-btnAbrirCredenciales.addEventListener('click', () => {
-  document.getElementById('credErrorMsg').classList.add('hidden');
-  document.getElementById('credSuccessMsg').classList.add('hidden');
-  document.getElementById('nuevoUsuario').value = currentUser.usuarioLogin || currentUser.nombre;
-  document.getElementById('nuevaPassword').value = '';
-  modalCredenciales.classList.remove('hidden');
-});
-
-document.getElementById('btnCerrarCredenciales').addEventListener('click', () => {
-  modalCredenciales.classList.add('hidden');
-});
-
-formCredenciales.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  document.getElementById('credErrorMsg').classList.add('hidden');
-  document.getElementById('credSuccessMsg').classList.add('hidden');
-
-  const nuevoUsuario = document.getElementById('nuevoUsuario').value.trim();
-  const nuevaPassword = document.getElementById('nuevaPassword').value.trim();
-
-  const btnHtml = btnGuardarCredenciales.innerHTML;
-  btnGuardarCredenciales.disabled = true;
-  btnGuardarCredenciales.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Guardando...';
-
-  try {
-    const response = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ 
-        action: 'actualizarCredenciales', 
-        email: currentUser.email,
-        nuevoUsuario: nuevoUsuario, 
-        nuevaPassword: nuevaPassword 
-      })
-    });
-
-    const result = await response.json();
-
-    if (result.status === 'success') {
-      currentUser.usuarioLogin = nuevoUsuario;
-      localStorage.setItem('appResiduosUser', JSON.stringify(currentUser));
-      
-      document.getElementById('credSuccessMsg').classList.remove('hidden');
-      setTimeout(() => { modalCredenciales.classList.add('hidden'); }, 2000);
-    } else {
-      throw new Error(result.message || "Error al actualizar credenciales");
-    }
-  } catch (error) {
-    document.getElementById('credErrorMsg').textContent = error.message || "Error al conectar.";
-    document.getElementById('credErrorMsg').classList.remove('hidden');
-  } finally {
-    btnGuardarCredenciales.disabled = false;
-    btnGuardarCredenciales.innerHTML = btnHtml;
+  if (!datosCargados) {
+    cargarDatosDashboard();
+  } else {
+    aplicarFiltros(); 
+    // FIX: Obligamos a revelar el contenedor que fue cargado en segundo plano
+    const dashContent = document.getElementById('dashboardContent');
+    if(dashContent) dashContent.classList.remove('hidden');
   }
 });
 
 // ==========================================
 // LOGICA DEL DASHBOARD Y OBTENCIÓN DE DATOS
 // ==========================================
-async function cargarDatosDashboard(event) {
-  if (event && event.type === 'keydown') {
-    if (event.key !== 'Enter') return; 
-    if (document.activeElement) document.activeElement.blur();
+// FIX: Aceptamos boolean (true) desde el botón, o el evento nativo si es un input
+async function cargarDatosDashboard(eventOrForce) {
+  let isForced = false;
+  
+  if (eventOrForce === true) {
+      isForced = true;
+  } else if (eventOrForce && eventOrForce.type === 'keydown') {
+      if (eventOrForce.key !== 'Enter') return; 
+      if (document.activeElement) document.activeElement.blur();
   }
+
+  // Seguro anti-colisiones
+  if (isFetchingDashboard) return;
 
   const fInicioStr = document.getElementById('filtroFechaInicio').value;
   const fFinStr = document.getElementById('filtroFechaFin').value;
@@ -373,44 +533,69 @@ async function cargarDatosDashboard(event) {
   const yearInicio = extraerAnio(fInicioStr);
   const yearFin = extraerAnio(fFinStr);
 
-  // Validación de seguridad para que el input date no dispare en fechas como '0002'
   if (yearInicio < 2000 || yearInicio > 2100) return; 
   if (yearFin < 2000 || yearFin > 2100) return; 
 
-  const containerLoading = document.getElementById('dashboardLoading');
-  const containerContent = document.getElementById('dashboardContent');
+  const containerLoadingDash = document.getElementById('dashboardLoading');
+  const containerContentDash = document.getElementById('dashboardContent');
+  
+  const containerLoadingRev = document.getElementById('revisionLoading');
+  const containerContentRev = document.getElementById('revisionContent');
+  const emptyStateRev = document.getElementById('emptyRevisionState');
 
-  containerContent.classList.add('hidden');
-  containerLoading.classList.remove('hidden');
+  const isRevActive = !document.getElementById('vistaRevision').classList.contains('hidden');
+  const isDashActive = !document.getElementById('vistaDashboard').classList.contains('hidden');
+
+  if (isRevActive) {
+      if (containerContentRev) containerContentRev.classList.add('hidden');
+      if (emptyStateRev) emptyStateRev.classList.add('hidden');
+      if (containerLoadingRev) containerLoadingRev.classList.remove('hidden');
+  } else if (isDashActive) {
+      if (containerContentDash) containerContentDash.classList.add('hidden');
+      if (containerLoadingDash) containerLoadingDash.classList.remove('hidden');
+  }
+
+  isFetchingDashboard = true; 
 
   try {
-    const response = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ 
-        action: 'getDatos',
-        fechaInicio: fInicioStr, 
-        fechaFin: fFinStr        
-      })
-    });
+    const [response] = await Promise.all([
+      fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ 
+          action: 'getDatos',
+          fechaInicio: fInicioStr, 
+          fechaFin: fFinStr,
+          forceRefresh: isForced // FIX: Le avisamos al Backend que destruya la caché
+        })
+      }),
+      new Promise(resolve => setTimeout(resolve, 600))
+    ]);
     
     const result = await response.json();
     if (result.status === 'success') {
       todosLosRegistros = result.data; 
       datosCargados = true;
-      aplicarFiltros(); 
-      renderizarMisRegistros(); // Mantenemos la tabla de revisión sincronizada
+      
+      if (isRevActive) renderizarMisRegistros(); 
+      if (isDashActive) aplicarFiltros(); 
+      
     } else {
       throw new Error(result.message || "Error al obtener datos");
     }
   } catch (error) {
     console.error("Error Dashboard:", error);
-    alert("No se pudieron cargar los datos del Dashboard.");
+    if (isDashActive || isRevActive) alert("No se pudieron cargar los datos. Verifica tu red.");
   } finally {
-    containerLoading.classList.add('hidden');
-    containerContent.classList.remove('hidden');
+    isFetchingDashboard = false; 
+    
+    if (containerLoadingRev) containerLoadingRev.classList.add('hidden');
+    if (containerLoadingDash) containerLoadingDash.classList.add('hidden');
+    
+    if (containerContentDash) containerContentDash.classList.remove('hidden');
   }
 }
+
 
 function aplicarFiltros() {
   if (!datosCargados) return;
@@ -475,6 +660,9 @@ Chart.defaults.font.family = 'sans-serif';
 function dibujarGraficoAreas(labels, data) {
   const ctx = document.getElementById('chartArea').getContext('2d');
   if (chartAreaInstancia) chartAreaInstancia.destroy();
+  
+  const isDark = document.documentElement.classList.contains('dark');
+  const textColor = isDark ? '#cbd5e1' : '#475569';
 
   chartAreaInstancia = new Chart(ctx, {
     type: 'bar',
@@ -494,8 +682,8 @@ function dibujarGraficoAreas(labels, data) {
       maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: { 
-        y: { beginAtZero: true },
-        x: { ticks: { font: { weight: '600' } } }
+        y: { beginAtZero: true, ticks: {color: textColor} },
+        x: { ticks: { font: { weight: '600' }, color: textColor } }
       },
       animation: false
     }
@@ -505,6 +693,9 @@ function dibujarGraficoAreas(labels, data) {
 function dibujarGraficoTipos(labels, data) {
   const ctx = document.getElementById('chartTipo').getContext('2d');
   if (chartTipoInstancia) chartTipoInstancia.destroy();
+  
+  const isDark = document.documentElement.classList.contains('dark');
+  const textColor = isDark ? '#cbd5e1' : '#475569';
 
   const coloresTipos = labels.map(tipo => {
     if(tipo.includes('Organico') || tipo.includes('ORGANICO')) return '#22c55e'; 
@@ -520,14 +711,14 @@ function dibujarGraficoTipos(labels, data) {
       datasets: [{
         data: data,
         backgroundColor: coloresTipos,
-        borderWidth: 2,
+        borderWidth: isDark ? 0 : 2,
         hoverOffset: 4
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom' } },
+      plugins: { legend: { position: 'bottom', labels: { color: textColor} } },
       animation: false
     }
   });
@@ -576,7 +767,9 @@ document.getElementById('btnPrint').addEventListener('click', () => {
   document.getElementById('printFFin').textContent = document.getElementById('filtroFechaFin').value;
   document.getElementById('printFArea').textContent = selArea.options[selArea.selectedIndex].text;
   document.getElementById('printFTipo').textContent = selTipo.options[selTipo.selectedIndex].text;
-  document.getElementById('printFirmaNombre').textContent = currentUser.nombre;
+  
+  const nombreAutor = AppState.user ? (AppState.user.nombre || AppState.user.usuario) : "Supervisor";
+  document.getElementById('printFirmaNombre').textContent = nombreAutor;
 
   window.print();
 });
@@ -587,49 +780,54 @@ document.getElementById('btnPrint').addEventListener('click', () => {
 function renderizarMisRegistros() {
   const tbody = document.getElementById('tablaMisRegistros');
   const emptyState = document.getElementById('emptyRevisionState');
+  const revContent = document.getElementById('revisionContent'); // NUEVO
+  
   if (!tbody || !emptyState) return;
   tbody.innerHTML = '';
   
-  // Filtramos por correo (o nombre) del usuario autenticado actual
+  if(!AppState.user) return;
+
   const misRegistros = todosLosRegistros.filter(r => {
     const autorEmail = String(r.email || r.supervisor).trim().toLowerCase();
-    const sesionEmail = String(currentUser.email).trim().toLowerCase();
-    const sesionNombre = String(currentUser.nombre).trim().toLowerCase();
+    const sesionEmail = String(AppState.user.email || AppState.user.usuario).trim().toLowerCase();
+    const sesionNombre = String(AppState.user.nombre).trim().toLowerCase();
     return autorEmail === sesionEmail || autorEmail === sesionNombre;
   });
   
   if (misRegistros.length === 0) {
     emptyState.classList.remove('hidden');
+    if (revContent) revContent.classList.add('hidden'); // Ocultar tabla si no hay nada
     return;
   }
   
   emptyState.classList.add('hidden');
+  if (revContent) revContent.classList.remove('hidden'); // Mostrar tabla si hay datos
   
-  // Ordenar de más reciente a más antiguo basándose en el ID (Timestamp)
   misRegistros.sort((a, b) => Number(b.id) - Number(a.id));
   
+  // (El resto del forEach() se mantiene exactamente igual...)
   misRegistros.forEach(reg => {
-    let colorTipo = "bg-gray-100 text-gray-800";
+    let colorTipo = "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200";
     const tipo = String(reg.tipo || reg.TIPO || '');
-    if(tipo.includes("Organico")) colorTipo = "bg-green-100 text-green-800";
-    else if(tipo.includes("Plastico")) colorTipo = "bg-blue-100 text-blue-800";
-    else if(tipo.includes("Carton")) colorTipo = "bg-yellow-100 text-yellow-800";
+    if(tipo.includes("Organico")) colorTipo = "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400";
+    else if(tipo.includes("Plastico")) colorTipo = "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400";
+    else if(tipo.includes("Carton")) colorTipo = "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400";
     
     const tr = document.createElement('tr');
-    tr.className = "hover:bg-gray-50 transition-colors";
+    tr.className = "hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors";
     tr.innerHTML = `
-      <td class="px-4 py-3 whitespace-nowrap">
-        <div class="font-medium text-gray-900">${formatearFechaEstandar(reg.fecha || reg.FECHA)}</div>
-        <div class="text-xs text-gray-500">${formatearHora24(reg.hora || reg.HORA)}</div>
+      <td class="px-4 py-3 whitespace-nowrap border-b dark:border-gray-700">
+        <div class="font-medium text-gray-900 dark:text-gray-100">${formatearFechaEstandar(reg.fecha || reg.FECHA)}</div>
+        <div class="text-xs text-gray-500 dark:text-gray-400">${formatearHora24(reg.hora || reg.HORA)}</div>
       </td>
-      <td class="px-4 py-3 whitespace-nowrap">${reg.area || reg.AREA}</td>
-      <td class="px-4 py-3 whitespace-nowrap">
+      <td class="px-4 py-3 whitespace-nowrap border-b dark:border-gray-700">${reg.area || reg.AREA}</td>
+      <td class="px-4 py-3 whitespace-nowrap border-b dark:border-gray-700">
         <span class="px-2 py-1 text-[10px] rounded-full font-medium ${colorTipo}">${tipo}</span>
       </td>
-      <td class="px-4 py-3 whitespace-nowrap text-center font-medium">${reg.peso || reg.PESO}</td>
-      <td class="px-4 py-3 whitespace-nowrap text-center text-gray-500">${reg.bolsas || reg.BOLSAS_USADAS || reg['BOLSAS USADAS'] || 0}</td>
-      <td class="px-4 py-3 whitespace-nowrap text-center">
-        <button onclick="abrirModalEdicion('${reg.id}')" class="text-green-600 hover:text-green-800 hover:bg-green-50 p-2 rounded-full transition-colors" title="Editar">
+      <td class="px-4 py-3 whitespace-nowrap text-center font-medium border-b dark:border-gray-700">${reg.peso || reg.PESO}</td>
+      <td class="px-4 py-3 whitespace-nowrap text-center text-gray-500 border-b dark:border-gray-700">${reg.bolsas || reg.BOLSAS_USADAS || reg['BOLSAS USADAS'] || 0}</td>
+      <td class="px-4 py-3 whitespace-nowrap text-center border-b dark:border-gray-700">
+        <button onclick="abrirModalEdicion('${reg.id}')" class="text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/40 p-2 rounded-full transition-colors" title="Editar">
           <i class="ph ph-pencil-simple text-lg"></i>
         </button>
       </td>
@@ -638,8 +836,12 @@ function renderizarMisRegistros() {
   });
 }
 
-// Controladores del Modal de Edición (Debe ser global para el onclick HTML)
 window.abrirModalEdicion = function(id) {
+  if (!navigator.onLine) {
+    alert("Para editar registros necesitas conexión a internet.");
+    return;
+  }
+
   const registro = todosLosRegistros.find(r => String(r.id) === String(id));
   if (!registro) return;
   
@@ -663,12 +865,14 @@ document.getElementById('formEdicionRegistro').addEventListener('submit', async 
   const btnGuardar = document.getElementById('btnGuardarEdicion');
   const originalText = btnGuardar.innerHTML;
   btnGuardar.disabled = true;
-  btnGuardar.innerHTML = '<i class="ph ph-spinner ph-spin text-xl"></i> Guardando...';
+ btnGuardar.innerHTML = '<i class="ph ph-spinner animate-spin inline-block text-xl"></i> Guardando...';
+  
+  const valEmail = AppState.user.email || AppState.user.usuario; // Fallback por si el hub no manda email
   
   const payload = {
     action: 'editarRegistro',
     id: document.getElementById('editId').value,
-    supervisorEmail: currentUser.email, 
+    supervisorEmail: valEmail, 
     area: document.getElementById('editArea').value,
     tipo: document.getElementById('editTipo').value,
     peso: parseFloat(document.getElementById('editPeso').value),
@@ -686,14 +890,12 @@ document.getElementById('formEdicionRegistro').addEventListener('submit', async 
     const result = await response.json();
     
     if (result.success || result.status === 'success') {
-      // Regla Arquitectónica: Single Page Application Update (No recargamos la BD)
       const index = todosLosRegistros.findIndex(r => String(r.id) === String(payload.id));
       if (index !== -1) {
         todosLosRegistros[index] = { ...todosLosRegistros[index], ...payload };
       }
-      
       renderizarMisRegistros();
-      aplicarFiltros(); // Actualizamos KPIs y Gráficos del dashboard en silencio
+      aplicarFiltros(); 
       cerrarModalEdicion();
     } else {
       alert("Error: " + result.message);
@@ -709,7 +911,7 @@ document.getElementById('formEdicionRegistro').addEventListener('submit', async 
 
 
 // ==========================================
-// FORMULARIO DE REGISTRO (CREACIÓN)
+// FORMULARIO DE REGISTRO Y ENVÍO HÍBRIDO
 // ==========================================
 const imagenInput = document.getElementById('imagen');
 const fileNameDisplay = document.getElementById('fileNameDisplay');
@@ -722,22 +924,57 @@ let imageBase64 = '';
 let imageMimeType = '';
 let imageName = '';
 
-imagenInput.addEventListener('change', function(e) {
+// ==========================================
+// CAPTURA Y PROCESAMIENTO ASÍNCRONO DE EVIDENCIA
+// ==========================================
+imagenInput.addEventListener('change', async function(e) {
   const file = e.target.files[0];
   if (file) {
-    fileNameDisplay.textContent = file.name;
-    imageName = file.name;
-    imageMimeType = file.type;
-    const reader = new FileReader();
-    reader.onload = function(readerEvent) {
-      const dataUrl = readerEvent.target.result;
-      imagePreview.src = dataUrl;
+    // UI: Estado de carga en el placeholder (UX Premium)
+    imagePlaceholder.innerHTML = `
+      <i class="ph ph-spinner animate-spin mx-auto text-4xl text-green-500"></i>
+      <p class="text-xs text-gray-500 mt-2">Optimizando evidencia...</p>
+    `;
+    
+    try {
+      // --- PASO CLAVE: PROCESAMIENTO EN <CANVAS> ---
+      // Ejecutamos la compresión instantánea en el Frontend
+      const { base64, type } = await procesarYComprimirImagen(file);
+      
+      // Actualizamos variables globales con datos ligeros
+      imageBase64 = base64;
+      imageMimeType = type; // Ahora será 'image/jpeg' siempre
+      imageName = file.name.replace(/\.[^/.]+$/, "") + "_opt.jpg"; // Renombramos para trazabilidad
+      
+      // UI: Actualizar vista previa con la imagen ya COMPRIMIDA
+      // Usamos el Base64 ligero para la vista previa, garantizando fluidez del DOM
+      imagePreview.src = `data:${type};base64,${base64}`;
+      fileNameDisplay.textContent = imageName;
+      
+      // Restaurar UI de placeholders y mostrar preview
       imagePlaceholder.classList.add('hidden');
       imagePreviewContainer.classList.remove('hidden');
       imagePreviewContainer.classList.add('flex');
-      imageBase64 = dataUrl.split(',')[1];
+      
+    } catch (error) {
+      console.error("Error procesando imagen:", error);
+      alert("No se pudo procesar la imagen. Intenta tomar otra foto o subir un archivo más ligero.");
+      resetImageUI();
+    } finally {
+      // Restaurar el HTML original del placeholder por si acaso
+      if (imagePlaceholder.innerHTML.includes('ph-spinner')) {
+         imagePlaceholder.innerHTML = `
+          <i class="ph ph-camera mx-auto text-4xl text-gray-400 dark:text-gray-500"></i>
+          <div class="flex text-sm justify-center">
+            <label for="imagen" class="relative cursor-pointer bg-white dark:bg-gray-800 rounded-md font-medium text-green-600 dark:text-green-400 hover:text-green-500 px-3 py-2 border border-green-200 dark:border-gray-600 shadow-sm transition-all hover:shadow">
+              <span><i class="ph ph-camera-plus mr-1"></i> Tomar foto o subir</span>
+            </label>
+          </div>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Formatos soportados: PNG, JPG</p>
+        `;
+      }
     }
-    reader.readAsDataURL(file);
+    
   } else {
     resetImageUI();
   }
@@ -765,18 +1002,25 @@ const registrosContainer = document.getElementById('registrosContainer');
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   
+  if(!AppState.isSessionVerified) return alert("Sesión no validada por el Hub GenApps.");
+
   const btnOriginalHtml = submitBtn.innerHTML;
   submitBtn.disabled = true;
-  submitBtn.innerHTML = '<i class="ph ph-spinner ph-spin text-xl"></i> <span>Guardando...</span>';
+  submitBtn.innerHTML = '<i class="ph ph-spinner animate-spin inline-block text-xl"></i> <span>Guardando...</span>';
   
-  const timestampVal = document.getElementById('timestamp').value.trim();
-  const parts = timestampVal.split(' ');
-  const fechaVal = parts[0] || '';
-  const horaVal = parts[1] || '';
+  // 1. Extraemos y formateamos la Fecha (De YYYY-MM-DD a DD/MM/YYYY para el Backend)
+  const rawFecha = document.getElementById('fechaRegistro').value;
+  const partesFecha = rawFecha.split('-');
+  const fechaVal = partesFecha.length === 3 ? `${partesFecha[2]}/${partesFecha[1]}/${partesFecha[0]}` : rawFecha;
   
+  // 2. Extraemos la hora
+  const horaVal = document.getElementById('horaRegistro').value;
+  
+  const valEmail = AppState.user.email || AppState.user.usuario;
+
   const formData = {
     action: 'registrar',
-    supervisor: currentUser.email, // Trazabilidad Inmutable
+    supervisor: valEmail, 
     area: document.getElementById('area').value,
     tipo: document.getElementById('tipo').value,
     peso: document.getElementById('peso').value,
@@ -789,67 +1033,125 @@ form.addEventListener('submit', async (e) => {
     imagenNombre: imageName
   };
 
-  try {
-    const response = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(formData)
-    });
-    
-    const result = await response.json();
-    if (result.status !== 'success') {
-      throw new Error(result.message || "Error desconocido al guardar en servidor");
-    }
+ // 1. UI OPTIMISTA: Encolamos en IndexedDB
+  await SyncManager.enqueue(formData);
+  agregarRegistroAUi(formData, true);
+  
+  // 2. Feedback visual persistente (4 segundos)
+  successMessage.innerHTML = '<i class="ph-fill ph-check-circle text-xl mr-2 text-green-600 dark:text-green-400"></i> ¡Registro capturado!';
+  successMessage.classList.remove('opacity-0');
+  
+  // Limpiamos timeouts previos por si el usuario presiona "Guardar" varias veces seguidas
+  if (window.successTimeout) clearTimeout(window.successTimeout);
+  window.successTimeout = setTimeout(() => successMessage.classList.add('opacity-0'), 4000);
+  
+  // 3. Limpiamos y preparamos para el siguiente registro instantáneamente
+  document.getElementById('peso').value = '';
+  document.getElementById('bolsas').value = '1';
+  resetImageUI();
+  actualizarTimestamp();
+  
+  // HABILITAMOS EL BOTÓN DE INMEDIATO
+  submitBtn.disabled = false;
+  submitBtn.innerHTML = btnOriginalHtml;
 
-    agregarRegistroAUi(formData);
-    successMessage.classList.remove('opacity-0');
-    setTimeout(() => successMessage.classList.add('opacity-0'), 3000);
-    
-    document.getElementById('peso').value = '';
-    document.getElementById('bolsas').value = '1';
-    resetImageUI();
-    actualizarTimestamp();
-    
-    datosCargados = false; // Invalidamos la caché local para forzar recarga en el dashboard
-    
-  } catch (error) {
-    console.error("Error al guardar:", error);
-    alert("Hubo un error al guardar el registro. Intente nuevamente.");
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.innerHTML = btnOriginalHtml;
-  }
+  // 4. Disparamos la sincronización silenciosa (Fire and Forget)
+  SyncManager.sync();
 });
 
-function agregarRegistroAUi(data) {
+function agregarRegistroAUi(data, isPending = false) {
   if (registrosContainer.querySelector('.italic')) {
     registrosContainer.innerHTML = '';
   }
-  const colorTipo = data.tipo === 'Organico' ? 'bg-green-100 text-green-700' :
-    data.tipo === 'Plastico' ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-700';
+  const colorTipo = data.tipo === 'Organico' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
+    data.tipo === 'Plastico' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
   
   const supervisorCorto = data.supervisor.split('@')[0];
-  const idSimulado = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+  const idTemporal = data._localId || Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
   const fotoIcon = data.imagenBase64 ? '<i class="ph-fill ph-image text-green-500" title="Foto adjunta"></i>' : '';
   const fechaMostrar = formatearFechaEstandar(data.fecha);
   const horaMostrar = formatearHora24(data.hora);
 
+  const statusIcon = isPending 
+    ? `<span id="sync-tag-${idTemporal}"><i class="ph-fill ph-cloud-slash text-yellow-500 ml-1" title="Pendiente de red"></i></span>`
+    : `<span id="sync-tag-${idTemporal}"><i class="ph-fill ph-cloud-check text-green-500 ml-1" title="Sincronizado"></i></span>`;
+
   const html = `
-      <div class="p-4 rounded-lg border border-gray-100 bg-gray-50 hover:bg-gray-100 transition-colors fade-in">
+      <div class="p-4 rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors fade-in">
           <div class="flex justify-between items-start mb-2">
-              <span class="text-xs font-mono text-gray-500">#${idSimulado} ${fotoIcon}</span>
+              <span class="text-xs font-mono text-gray-500 dark:text-gray-400">#${idTemporal.substring(idTemporal.length - 6)} ${fotoIcon} ${statusIcon}</span>
               <span class="text-xs px-2 py-1 rounded-full font-medium ${colorTipo}">${data.tipo}</span>
           </div>
-          <p class="font-medium text-gray-900">${data.area}</p>
-          <div class="mt-2 text-sm text-gray-600 flex justify-between">
+          <p class="font-medium text-gray-900 dark:text-gray-100">${data.area}</p>
+          <div class="mt-2 text-sm text-gray-600 dark:text-gray-400 flex justify-between">
               <span>${data.peso} kg</span>
               <span>${data.bolsas} bolsa(s)</span>
           </div>
-          <div class="mt-2 text-xs text-gray-500 flex justify-between items-center border-t border-gray-200 pt-2">
+          <div class="mt-2 text-xs text-gray-500 flex justify-between items-center border-t border-gray-200 dark:border-gray-700 pt-2">
               <span class="truncate max-w-[120px]" title="${data.supervisor}">${supervisorCorto}</span>
               <span>${fechaMostrar} ${horaMostrar}</span>
           </div>
       </div>
   `;
   registrosContainer.insertAdjacentHTML('afterbegin', html);
+}
+
+/**
+ * Procesa una imagenFile (File objeto) usando <canvas> para redimensionar y comprimir.
+ * @param {File} imageFile - El archivo original capturado del input.
+ * @returns {Promise<{base64: string, type: string}>} - Promesa con los datos optimizados.
+ */
+function procesarYComprimirImagen(imageFile) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    // 1. Leer archivo original como DataURL
+    reader.readAsDataURL(imageFile);
+    
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      
+      img.onload = () => {
+        // 2. Crear Canvas Oculto
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let width = img.width;
+        let height = img.height;
+        
+        // 3. Calcular Redimensionado Proporcional (Aspect Ratio)
+        if (width > MAX_IMAGE_WIDTH) {
+          height = Math.round((height * MAX_IMAGE_WIDTH) / width);
+          width = MAX_IMAGE_WIDTH;
+        }
+        
+        // 4. Configurar dimensiones del Canvas y dibujar
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Volcar imagen al canvas (esto ya aplica suavizado nativo)
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // 5. Exportar a Base64 optimizado (JPEG forzado para máxima compresión)
+        // .toDataURL(type, quality) -> quality es clave aquí.
+        const optimizedBase64DataUrl = canvas.toDataURL('image/jpeg', IMAGE_QUALITY);
+        
+        // Extraer solo la cadena Base64 pura para el Backend
+        const finalBase64 = optimizedBase64DataUrl.split(',')[1];
+        
+        // Liberar memoria explícitamente (Buena práctica en móviles)
+        canvas.width = 0; canvas.height = 0; 
+
+        resolve({
+          base64: finalBase64,
+          type: 'image/jpeg' // Forzamos JPEG en la salida optimizada
+        });
+      };
+      
+      img.onerror = (err) => reject('Error cargando imagen en objeto Image: ' + err);
+    };
+    
+    reader.onerror = (err) => reject('Error leyendo archivo original: ' + err);
+  });
 }
