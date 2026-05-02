@@ -568,38 +568,160 @@ function renderizarMisRegistros() {
 document.getElementById('btnExportarExcel').addEventListener('click', () => { /* Tu código previo de Excel intacto... */ });
 document.getElementById('btnPrint').addEventListener('click', () => { window.print(); });
 
+// Variables Globales para la Edición de Imagen
+let edicionImageBase64 = ''; 
+let edicionImageMimeType = ''; 
+let edicionImageName = '';
+
+// Helper O(1) para invertir fechas DD/MM/YYYY a YYYY-MM-DD
+function parseDateForInput(fechaEstandar) {
+  if (!fechaEstandar) return '';
+  const p = fechaEstandar.split('/');
+  if (p.length === 3) return `${p[2]}-${p[1]}-${p[0]}`;
+  return fechaEstandar;
+}
+
 window.abrirModalEdicion = function(id) {
-  if (!navigator.onLine) return alert("Para editar registros necesitas conexión a internet.");
+  if (!navigator.onLine) return alert("Arquitectura Híbrida: Para editar o eliminar registros históricos requieres conexión a la base de datos maestra.");
   const registro = todosLosRegistros.find(r => String(r.id) === String(id));
   if (!registro) return;
+  
   document.getElementById('editId').value = registro.id;
+  
+  // Mapeo exhaustivo de variables
+  document.getElementById('editFecha').value = parseDateForInput(registro.fecha || registro.FECHA);
+  // Limpiamos AM/PM para el input type="time"
+  let horaPura = (registro.hora || registro.HORA || '').replace(/[a-zA-Z]/g, '').trim();
+  if(horaPura.length === 5) horaPura += ':00'; // Forzar formato HH:MM:SS
+  document.getElementById('editHora').value = horaPura;
+
   document.getElementById('editArea').value = registro.area || registro.AREA;
   document.getElementById('editTipo').value = registro.tipo || registro.TIPO;
   document.getElementById('editPeso').value = registro.peso || 0;
-  document.getElementById('editBolsas').value = registro.bolsas || 1;
+  document.getElementById('editBolsas').value = registro.bolsas || reg['BOLSAS USADAS'] || reg.BOLSAS_USADAS || 1;
   document.getElementById('editObservaciones').value = obtenerObservaciones(registro);
+  
+  // Limpiar estados previos de imagen
+  edicionImageBase64 = ''; edicionImageMimeType = ''; edicionImageName = '';
+  document.getElementById('editImagen').value = '';
+  document.getElementById('editFileNameDisplay').innerHTML = '<i class="ph ph-camera-rotate"></i> Cambiar foto';
+  
+  const currentImg = document.getElementById('editImagePreviewCurrent');
+  const existingUrl = obtenerUrlImagen(registro);
+  if (existingUrl && existingUrl !== 'Sin Imagen') {
+    currentImg.src = existingUrl;
+    currentImg.classList.remove('hidden');
+  } else {
+    currentImg.src = '';
+    currentImg.classList.add('hidden');
+  }
+
   document.getElementById('modalEdicion').classList.remove('hidden');
 };
 
 window.cerrarModalEdicion = function() { document.getElementById('modalEdicion').classList.add('hidden'); };
 
+// INTERCEPTOR EDGE: Compresión en Canvas para Edición
+document.getElementById('editImagen').addEventListener('change', async function(e) {
+  const file = e.target.files[0];
+  if (file) {
+    document.getElementById('editFileNameDisplay').innerHTML = '<i class="ph ph-spinner animate-spin"></i> Optimizando...';
+    try {
+      const { base64, type } = await procesarYComprimirImagen(file);
+      edicionImageBase64 = base64; edicionImageMimeType = type; edicionImageName = file.name.replace(/\.[^/.]+$/, "") + "_edit.jpg";
+      document.getElementById('editImagePreviewCurrent').src = `data:${type};base64,${base64}`;
+      document.getElementById('editImagePreviewCurrent').classList.remove('hidden');
+      document.getElementById('editFileNameDisplay').innerHTML = '<i class="ph ph-check-circle text-green-500"></i> Lista';
+    } catch (err) {
+      document.getElementById('editFileNameDisplay').innerHTML = '<i class="ph ph-warning text-red-500"></i> Error';
+    }
+  }
+});
+
+// MOTOR DE GUARDADO CON UI OPTIMISTA
 document.getElementById('formEdicionRegistro').addEventListener('submit', async function(e) {
   e.preventDefault();
   const btn = document.getElementById('btnGuardarEdicion'); const txt = btn.innerHTML;
-  btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i>';
+  btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner animate-spin text-xl"></i>';
   const valEmail = AppState.user.email || AppState.user.usuario;
   
-  const payload = { action: 'editarRegistro', id: document.getElementById('editId').value, supervisorEmail: valEmail, area: document.getElementById('editArea').value, tipo: document.getElementById('editTipo').value, peso: parseFloat(document.getElementById('editPeso').value), bolsas: parseInt(document.getElementById('editBolsas').value), observaciones: document.getElementById('editObservaciones').value };
+  const rawF = document.getElementById('editFecha').value.split('-');
+  const fVal = rawF.length===3 ? `${rawF[2]}/${rawF[1]}/${rawF[0]}` : rawF;
+  const hVal = document.getElementById('editHora').value;
+
+  const payload = { 
+    action: 'editarRegistro', 
+    id: document.getElementById('editId').value, 
+    supervisorEmail: valEmail, 
+    fecha: fVal,
+    hora: hVal,
+    area: document.getElementById('editArea').value, 
+    tipo: document.getElementById('editTipo').value, 
+    peso: parseFloat(document.getElementById('editPeso').value), 
+    bolsas: parseInt(document.getElementById('editBolsas').value), 
+    observaciones: document.getElementById('editObservaciones').value,
+    imagenBase64: edicionImageBase64,
+    imagenMimeType: edicionImageMimeType,
+    imagenNombre: edicionImageName
+  };
 
   try {
     const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) }).then(r=>r.json());
-    if (res.success || res.status === 'success') {
+    if (res.status === 'success') {
       const idx = todosLosRegistros.findIndex(r => String(r.id) === String(payload.id));
-      if (idx !== -1) todosLosRegistros[idx] = { ...todosLosRegistros[idx], ...payload };
+      if (idx !== -1) {
+        // Mutación Optimista del Array Global
+        todosLosRegistros[idx] = { ...todosLosRegistros[idx], ...payload };
+      }
       renderizarMisRegistros(); aplicarFiltros(); cerrarModalEdicion();
-    } else alert("Error: " + res.message);
-  } catch (error) { alert("Error de red."); } finally { btn.disabled = false; btn.innerHTML = txt; }
+    } else alert("Rechazado por API: " + res.message);
+  } catch (error) { alert("Error de red: La operación no se concretó."); } 
+  finally { btn.disabled = false; btn.innerHTML = txt; }
 });
+
+// MOTOR DE DESTRUCCIÓN O(1) Y UI OPTIMISTA
+window.eliminarRegistroActual = async function() {
+  if (!navigator.onLine) return alert("Conexión requerida para destruir registros.");
+  if (!confirm("⚠️ ATENCIÓN: Esta acción es irreversible. ¿Deseas destruir este registro del Data Lake de HACCP?")) return;
+
+  const id = document.getElementById('editId').value;
+  const btn = document.getElementById('btnEliminarRegistro');
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = '<i class="ph ph-spinner animate-spin text-xl"></i>';
+  btn.disabled = true;
+
+  const valEmail = AppState.user.email || AppState.user.usuario;
+  
+  // 1. Respaldo para Rollback en caso de fallo de red
+  const indexOriginal = todosLosRegistros.findIndex(r => String(r.id) === String(id));
+  const registroRespaldado = todosLosRegistros[indexOriginal];
+
+  // 2. UI OPTIMISTA: Destruir visualmente sin esperar al servidor
+  todosLosRegistros = todosLosRegistros.filter(r => String(r.id) !== String(id));
+  renderizarMisRegistros();
+  aplicarFiltros();
+  cerrarModalEdicion();
+
+  try {
+      const res = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'eliminarRegistro', id: id, supervisorEmail: valEmail })
+      }).then(r => r.json());
+
+      if (res.status !== 'success') throw new Error(res.message);
+      // Operación consolidada. No hacer nada.
+      
+  } catch (e) {
+      alert("Error Crítico: " + e.message + ". Ejecutando Rollback visual.");
+      // 3. Rollback de I/O
+      todosLosRegistros.splice(indexOriginal, 0, registroRespaldado);
+      renderizarMisRegistros();
+      aplicarFiltros();
+  } finally {
+      btn.innerHTML = originalHtml;
+      btn.disabled = false;
+  }
+}
 
 const imagenInput = document.getElementById('imagen');
 let imageBase64 = ''; let imageMimeType = ''; let imageName = '';
